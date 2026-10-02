@@ -1,0 +1,22 @@
+{
+  "name": "plataforma-online-mj",
+  "version": "1.0.0",
+  "description": "Plataforma online para publicar e jogar jogos no browser, em português de Portugal.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/index.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch src/index.js",
+    "criar-conta": "node --disable-warning=ExperimentalWarning scripts/criar-conta.js",
+    "test": "node --disable-warning=ExperimentalWarning --test \"test/**/*.test.js\""
+  },
+  "dependencies": {
+    "adm-zip": "^0.6.1",
+    "bcryptjs": "^3.0.3",
+    "express": "^5.2.1",
+    "multer": "^2.4.0"
+  }
+}

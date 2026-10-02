@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apanha as Estrelas</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0c1d; overflow: hidden; font-family: system-ui, sans-serif; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+</style>
+</head>
+<body>
+<canvas id="ecra"></canvas>
+<script>
+// Jogo de exemplo: move o cesto com as setas, o rato ou o dedo e apanha as estrelas.
+const ecra = document.getElementById('ecra');
+const ctx = ecra.getContext('2d');
+let L, A, cesto, estrelas, pontos, vidas, recorde = 0, aJogar = false, teclas = {};
+
+function redimensionar() {
+  L = ecra.width = innerWidth;
+  A = ecra.height = innerHeight;
+}
+addEventListener('resize', redimensionar);
+redimensionar();
+
+function iniciar() {
+  cesto = { x: L / 2, l: 90 };
+  estrelas = [];
+  pontos = 0;
+  vidas = 3;
+  aJogar = true;
+}
+
+addEventListener('keydown', (e) => {
+  teclas[e.key] = true;
+  if (!aJogar && (e.key === ' ' || e.key === 'Enter')) iniciar();
+});
+addEventListener('keyup', (e) => { teclas[e.key] = false; });
+ecra.addEventListener('pointermove', (e) => { if (aJogar) cesto.x = e.clientX; });
+ecra.addEventListener('pointerdown', (e) => { if (!aJogar) iniciar(); else cesto.x = e.clientX; });
+
+function estrela(x, y, r, cor) {
+  ctx.fillStyle = cor;
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const ang = (Math.PI / 5) * i - Math.PI / 2;
+    const raio = i % 2 ? r / 2.2 : r;
+    ctx.lineTo(x + Math.cos(ang) * raio, y + Math.sin(ang) * raio);
+  }
+  ctx.fill();
+}
+
+function texto(t, x, y, tam, cor = '#fff') {
+  ctx.fillStyle = cor;
+  ctx.font = `800 ${tam}px system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText(t, x, y);
+}
+
+function ciclo() {
+  ctx.fillStyle = '#0b0c1d';
+  ctx.fillRect(0, 0, L, A);
+
+  if (aJogar) {
+    if (teclas.ArrowLeft) cesto.x -= 9;
+    if (teclas.ArrowRight) cesto.x += 9;
+    cesto.x = Math.max(cesto.l / 2, Math.min(L - cesto.l / 2, cesto.x));
+
+    if (Math.random() < 0.025 + pontos / 4000) {
+      const ma = Math.random() < 0.15;
+      estrelas.push({ x: 20 + Math.random() * (L - 40), y: -20, v: 2.5 + Math.random() * 2 + pontos / 40, ma });
+    }
+    for (const s of estrelas) {
+      s.y += s.v;
+      if (s.y > A - 40 && s.y < A - 10 && Math.abs(s.x - cesto.x) < cesto.l / 2 + 10) {
+        s.apanhada = true;
+        if (s.ma) vidas--; else pontos++;
+      } else if (s.y > A + 20) {
+        s.apanhada = true;
+        if (!s.ma) vidas--;
+      }
+    }
+    estrelas = estrelas.filter((s) => !s.apanhada);
+    if (vidas <= 0) {
+      aJogar = false;
+      recorde = Math.max(recorde, pontos);
+    }
+
+    for (const s of estrelas) estrela(s.x, s.y, 16, s.ma ? '#ef4458' : '#ffd23f');
+    ctx.fillStyle = '#7c5cff';
+    ctx.fillRect(cesto.x - cesto.l / 2, A - 30, cesto.l, 16);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#fff';
+    ctx.font = '700 20px system-ui, sans-serif';
+    ctx.fillText(`Pontos: ${pontos}   Vidas: ${'♥'.repeat(vidas)}`, 16, 32);
+  } else {
+    texto('Apanha as Estrelas', L / 2, A / 2 - 40, Math.min(56, L / 10));
+    texto('Apanha as amarelas, foge das vermelhas!', L / 2, A / 2, 20, '#a3a8d1');
+    texto(pontos === undefined ? 'Carrega no ecrã ou em Espaço para começar' : `Fizeste ${pontos} pontos (recorde: ${recorde}). Carrega para jogar outra vez.`, L / 2, A / 2 + 40, 18, '#22d3a6');
+  }
+  requestAnimationFrame(ciclo);
+}
+ciclo();
+</script>
+</body>
+</html>
