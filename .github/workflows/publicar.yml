@@ -1,0 +1,57 @@
+name: Publicar no Firebase
+
+# Publica o site sempre que há alterações no ramo principal do repositório
+# (ou manualmente, em Actions → Publicar no Firebase → Run workflow).
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: publicar-firebase
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Testes
+        run: npm test
+
+      - name: Preparar o site
+        run: npm run preparar
+
+      - name: Verificar configuração
+        env:
+          CONTA_SERVICO: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          PROJETO: ${{ vars.FIREBASE_PROJECT_ID }}
+        run: |
+          if [ -z "$CONTA_SERVICO" ] || [ -z "$PROJETO" ]; then
+            echo "::error::Falta configurar o segredo FIREBASE_SERVICE_ACCOUNT e/ou a variável FIREBASE_PROJECT_ID (ver README, secção «Ligar ao Firebase»)."
+            exit 1
+          fi
+
+      - name: Publicar
+        env:
+          CONTA_SERVICO: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          PROJETO: ${{ vars.FIREBASE_PROJECT_ID }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/conta-servico.json
+        run: |
+          printf '%s' "$CONTA_SERVICO" > "$GOOGLE_APPLICATION_CREDENTIALS"
+          npx firebase deploy --only hosting,firestore:rules --project "$PROJETO" --non-interactive
+          echo "### Site publicado em https://$PROJETO.web.app 🎮" >> "$GITHUB_STEP_SUMMARY"

@@ -3,3 +3,8 @@ dados/
 .env
 *.log
 .DS_Store
+publicar/
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log

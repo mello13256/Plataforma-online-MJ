@@ -1,0 +1,77 @@
+rules_version = '2';
+
+// Regras de segurança da base de dados.
+// - Qualquer pessoa vê os jogos publicados e os autores.
+// - Só os autores (documento em /autores/{uid}, criado à mão na consola) publicam e editam jogos.
+// - Cada autor só altera ou elimina os seus próprios jogos.
+// - Visitantes só podem somar +1 ao contador de jogadas de um jogo publicado.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function eAutor() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/autores/$(request.auth.uid));
+    }
+
+    function textoAte(valor, maximo) {
+      return valor is string && valor.size() <= maximo;
+    }
+
+    function jogoValido(j) {
+      return j.keys().hasOnly(['titulo', 'descricao', 'instrucoes', 'categoria', 'tipo', 'caminho',
+                               'url_externo', 'capa', 'publicado', 'jogadas', 'autor_uid',
+                               'criado_em', 'atualizado_em'])
+        && textoAte(j.titulo, 80) && j.titulo.size() > 0
+        && textoAte(j.descricao, 5000)
+        && textoAte(j.instrucoes, 2000)
+        && j.categoria in ['Ação', 'Aventura', 'Arcada', 'Corrida', 'Desporto', 'Estratégia',
+                           'Multijogador', 'Plataformas', 'Puzzle', 'Terror', 'Outro']
+        && j.publicado is bool
+        && j.jogadas is int
+        && (j.capa == null || (textoAte(j.capa, 300)
+              && j.capa.matches('^(jogos|capas)/[^?#:\\\\]+$') && !j.capa.matches('.*\\.\\..*')))
+        && (
+          (j.tipo == 'repositorio' && j.url_externo == null && textoAte(j.caminho, 300)
+            && j.caminho.matches('^jogos/[a-z0-9-]+/[^?#:\\\\]+$') && !j.caminho.matches('.*\\.\\..*'))
+          || (j.tipo == 'ligacao' && j.caminho == null && textoAte(j.url_externo, 500)
+            && j.url_externo.matches('^https?://.+'))
+        );
+    }
+
+    match /autores/{uid} {
+      allow read: if true;
+      // Os autores são criados na consola do Firebase; cada um só pode mudar o próprio nome.
+      allow update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome'])
+        && textoAte(request.resource.data.nome, 40) && request.resource.data.nome.size() > 0;
+    }
+
+    match /jogos/{slug} {
+      allow read: if resource.data.publicado == true || eAutor();
+
+      allow create: if eAutor()
+        && slug.matches('^[a-z0-9-]{1,70}$')
+        && jogoValido(request.resource.data)
+        && request.resource.data.autor_uid == request.auth.uid
+        && request.resource.data.jogadas == 0
+        && request.resource.data.criado_em == request.time
+        && request.resource.data.atualizado_em == request.time;
+
+      allow update: if (
+          eAutor()
+          && resource.data.autor_uid == request.auth.uid
+          && jogoValido(request.resource.data)
+          && request.resource.data.autor_uid == resource.data.autor_uid
+          && request.resource.data.criado_em == resource.data.criado_em
+          && request.resource.data.jogadas == resource.data.jogadas
+          && request.resource.data.atualizado_em == request.time
+        ) || (
+          resource.data.publicado == true
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['jogadas'])
+          && request.resource.data.jogadas == resource.data.jogadas + 1
+        );
+
+      allow delete: if eAutor() && resource.data.autor_uid == request.auth.uid;
+    }
+  }
+}

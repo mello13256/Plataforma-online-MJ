@@ -1,22 +1,21 @@
 {
   "name": "plataforma-online-mj",
   "version": "1.0.0",
-  "description": "Plataforma online para publicar e jogar jogos no browser, em português de Portugal.",
+  "description": "Plataforma de jogos online em português de Portugal, alojada no Firebase.",
   "type": "module",
   "private": true,
   "engines": {
-    "node": ">=22.13"
+    "node": ">=22"
   },
   "scripts": {
-    "start": "node --disable-warning=ExperimentalWarning src/index.js",
-    "dev": "node --disable-warning=ExperimentalWarning --watch src/index.js",
-    "criar-conta": "node --disable-warning=ExperimentalWarning scripts/criar-conta.js",
-    "test": "node --disable-warning=ExperimentalWarning --test \"test/**/*.test.js\""
+    "preparar": "node scripts/preparar-site.mjs",
+    "local": "npm run preparar && firebase emulators:start --project demo-jogos-mj",
+    "test": "firebase emulators:exec --only firestore --project demo-jogos-mj \"node --test test/*.test.mjs\""
   },
-  "dependencies": {
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "adm-zip": "^0.6.1",
-    "bcryptjs": "^3.0.3",
-    "express": "^5.2.1",
-    "multer": "^2.4.0"
+    "firebase": "^12.19.0",
+    "firebase-tools": "^15.32.1"
   }
 }
