@@ -17,12 +17,14 @@ export {
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 export {
   Bytes,
+  addDoc,
   collection,
   deleteDoc,
   doc,
   getDoc,
   getDocs,
   increment,
+  orderBy,
   query,
   runTransaction,
   serverTimestamp,

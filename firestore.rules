@@ -107,7 +107,7 @@ service cloud.firestore {
     function jogoValido(j) {
       return j.keys().hasOnly(['titulo', 'descricao', 'instrucoes', 'categoria', 'tipo', 'caminho',
                                'url_externo', 'pacote', 'capa', 'capa_imagem', 'transferencias', 'publicado',
-                               'jogadas', 'autor_uid', 'criado_em', 'atualizado_em'])
+                               'jogadas', 'gostos', 'autor_uid', 'criado_em', 'atualizado_em'])
         && textoEntre(j.titulo, 1, 80)
         && textoAte(j.descricao, 5000)
         && textoAte(j.instrucoes, 2000)
@@ -176,6 +176,7 @@ service cloud.firestore {
         && jogoValido(request.resource.data)
         && request.resource.data.autor_uid == request.auth.uid
         && request.resource.data.jogadas == 0
+        && request.resource.data.get('gostos', 0) == 0
         && request.resource.data.criado_em == request.time
         && request.resource.data.atualizado_em == request.time;
 
@@ -185,15 +186,59 @@ service cloud.firestore {
           && request.resource.data.autor_uid == resource.data.autor_uid
           && request.resource.data.criado_em == resource.data.criado_em
           && request.resource.data.jogadas == resource.data.jogadas
+          && request.resource.data.get('gostos', 0) == resource.data.get('gostos', 0)
           && request.resource.data.atualizado_em == request.time
         ) || (
           resource.data.publicado == true
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['jogadas'])
           && request.resource.data.jogadas == resource.data.jogadas + 1
+        ) || (
+          resource.data.publicado == true
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['gostos'])
+          && request.resource.data.gostos is int
+          && (request.resource.data.gostos == resource.data.get('gostos', 0) + 1
+              || (request.resource.data.gostos == resource.data.get('gostos', 0) - 1 && request.resource.data.gostos >= 0))
         );
 
       allow delete: if (pode('publicar') && resource.data.autor_uid == request.auth.uid)
         || pode('eliminar_todos');
+
+      // Comentários: qualquer pessoa comenta jogos publicados; o autor do jogo e
+      // os administradores/moderadores apagam.
+      match /comentarios/{comentario} {
+        allow read: if true;
+        allow create: if get(/databases/$(database)/documents/jogos/$(slug)).data.publicado == true
+          && request.resource.data.keys().hasOnly(['nome', 'texto', 'uid', 'criado_em'])
+          && textoEntre(request.resource.data.nome, 1, 40)
+          && textoEntre(request.resource.data.texto, 1, 1000)
+          && request.resource.data.criado_em == request.time
+          && (request.resource.data.get('uid', null) == null
+              || (request.auth != null && request.resource.data.uid == request.auth.uid));
+        allow delete: if pode('eliminar_todos')
+          || (pode('publicar') && get(/databases/$(database)/documents/jogos/$(slug)).data.autor_uid == request.auth.uid);
+      }
+    }
+
+    // ---------------------------------------------------------------- galerias
+    // Imagens extra de cada jogo (até 4), editadas por quem pode editar o jogo.
+    function imagemValida(lista, i) {
+      return lista.size() <= i || (lista[i] is string && lista[i].size() <= 300000
+        && lista[i].matches('^data:image/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$'));
+    }
+
+    function podeEditarJogo(slug) {
+      return (pode('publicar') && get(/databases/$(database)/documents/jogos/$(slug)).data.autor_uid == request.auth.uid)
+        || pode('editar_todos');
+    }
+
+    match /galerias/{slug} {
+      allow read: if true;
+      allow create, update: if podeEditarJogo(slug)
+        && request.resource.data.keys().hasOnly(['imagens'])
+        && request.resource.data.imagens is list && request.resource.data.imagens.size() <= 4
+        && imagemValida(request.resource.data.imagens, 0) && imagemValida(request.resource.data.imagens, 1)
+        && imagemValida(request.resource.data.imagens, 2) && imagemValida(request.resource.data.imagens, 3);
+      allow delete: if podeEditarJogo(slug) || pode('eliminar_todos');
     }
   }
 }

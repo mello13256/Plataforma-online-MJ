@@ -204,3 +204,46 @@ describe('pacotes (ficheiros carregados no site)', () => {
     await assertSucceeds(deleteDoc(doc(como('joel'), 'pacotes/pacote-joel-5')));
   });
 });
+
+describe('gostos, comentários e galeria', () => {
+  it('convidados dão e retiram gostos, um de cada vez', async () => {
+    const ref = doc(visitante(), 'jogos/publicado');
+    await assertSucceeds(updateDoc(ref, { gostos: 1 }));
+    await assertSucceeds(updateDoc(ref, { gostos: increment(1) }));
+    await assertSucceeds(updateDoc(ref, { gostos: increment(-1) }));
+    await assertFails(updateDoc(ref, { gostos: increment(5) }));
+    await assertFails(updateDoc(doc(visitante(), 'jogos/rascunho'), { gostos: 1 }));
+    await assertFails(updateDoc(doc(como('joel'), 'jogos/publicado'), { gostos: 99, atualizado_em: serverTimestamp() }));
+  });
+
+  it('não se tiram gostos abaixo de zero', async () => {
+    await assertFails(updateDoc(doc(visitante(), 'jogos/publicado'), { gostos: -1 }));
+  });
+
+  it('qualquer pessoa comenta jogos publicados', async () => {
+    const comentario = { nome: 'Rui', texto: 'Muito fixe!', criado_em: serverTimestamp() };
+    await assertSucceeds(setDoc(doc(visitante(), 'jogos/publicado/comentarios/c1'), comentario));
+    await assertSucceeds(setDoc(doc(como('joel'), 'jogos/publicado/comentarios/c2'), { ...comentario, uid: 'joel' }));
+    await assertFails(setDoc(doc(como('joel'), 'jogos/publicado/comentarios/c3'), { ...comentario, uid: 'antigo' }));
+    await assertFails(setDoc(doc(visitante(), 'jogos/rascunho/comentarios/c4'), comentario));
+    await assertFails(setDoc(doc(visitante(), 'jogos/publicado/comentarios/c5'), { ...comentario, texto: '' }));
+    await assertFails(setDoc(doc(visitante(), 'jogos/publicado/comentarios/c6'), { ...comentario, texto: 'x'.repeat(1001) }));
+  });
+
+  it('o autor do jogo e os moderadores apagam comentários', async () => {
+    await assertSucceeds(setDoc(doc(visitante(), 'jogos/publicado/comentarios/c1'), { nome: 'Rui', texto: 'spam', criado_em: serverTimestamp() }));
+    await assertFails(deleteDoc(doc(visitante(), 'jogos/publicado/comentarios/c1')));
+    await assertFails(deleteDoc(doc(como('antigo'), 'jogos/publicado/comentarios/c1')));
+    await assertSucceeds(deleteDoc(doc(como('joel'), 'jogos/publicado/comentarios/c1')));
+  });
+
+  it('galeria: só quem edita o jogo mexe nas imagens', async () => {
+    const imagens = { imagens: ['data:image/webp;base64,UklGRg=='] };
+    await assertSucceeds(setDoc(doc(como('joel'), 'galerias/publicado'), imagens));
+    await assertSucceeds(setDoc(doc(como('editor'), 'galerias/publicado'), imagens));
+    await assertFails(setDoc(doc(como('antigo'), 'galerias/publicado'), imagens));
+    await assertFails(setDoc(doc(como('joel'), 'galerias/publicado'), { imagens: ['javascript:alert(1)'] }));
+    await assertFails(setDoc(doc(como('joel'), 'galerias/publicado'), { imagens: Array(5).fill(imagens.imagens[0]) }));
+    await assertSucceeds(getDoc(doc(visitante(), 'galerias/publicado')));
+  });
+});

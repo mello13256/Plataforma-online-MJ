@@ -42,6 +42,7 @@ try {
           el('span', {}, el('strong', {}, j.titulo), el('br'), el('small', { class: 'meta' }, j.categoria)))),
         el('td', {}, j.publicado ? el('span', { class: 'estado publico' }, 'Público') : el('span', { class: 'estado rascunho' }, 'Rascunho')),
         el('td', {}, formatarNumero(j.jogadas)),
+        el('td', {}, formatarNumero(j.gostos || 0)),
         el('td', {}, formatarData(j.atualizado_em)),
         el('td', { class: 'acoes-linha' },
           podePublicar ? el('a', { class: 'botao pequeno secundario', href: `/editar?id=${j.id}` }, icone('editar'), 'Editar') : null,
@@ -69,7 +70,7 @@ try {
             ? el('div', { class: 'tabela-contentor' },
                 el('table', { class: 'tabela' },
                   el('thead', {}, el('tr', {},
-                    el('th', {}, 'Jogo'), el('th', {}, 'Estado'), el('th', {}, 'Jogadas'), el('th', {}, 'Atualizado'),
+                    el('th', {}, 'Jogo'), el('th', {}, 'Estado'), el('th', {}, 'Jogadas'), el('th', {}, 'Gostos'), el('th', {}, 'Atualizado'),
                     el('th', {}, el('span', { class: 'oculto' }, 'Ações')))),
                   el('tbody', {}, linhas)))
             : vazio('Ainda não publicaste nenhum jogo.',

@@ -1,5 +1,5 @@
 import {
-  Bytes, bd, collection, doc, getDoc, getDocs, runTransaction, serverTimestamp, setDoc, updateDoc,
+  Bytes, bd, collection, deleteDoc, doc, getDoc, getDocs, runTransaction, serverTimestamp, setDoc, updateDoc,
 } from './firebase.js';
 import {
   CATEGORIAS, REPOSITORIO, apagarPacote, capa, criarSlug, definirTitulo, el, exigirPerfil, formatarTamanho, icone,
@@ -51,7 +51,7 @@ function rotuloDoFicheiro(nome) {
 }
 
 // Reduz a imagem para no máximo 1280×720 e converte para WebP (ou JPEG), abaixo do limite.
-async function prepararCapa(ficheiro) {
+async function prepararCapa(ficheiro, limite = LIMITE_CAPA) {
   if (!ficheiro.type.startsWith('image/')) throw new Error('A capa tem de ser uma imagem (PNG, JPG, WEBP ou GIF).');
   const imagem = await createImageBitmap(ficheiro);
   let largura = Math.min(1280, imagem.width);
@@ -64,7 +64,7 @@ async function prepararCapa(ficheiro) {
     for (const qualidade of [0.85, 0.7, 0.55]) {
       let dados = tela.toDataURL('image/webp', qualidade);
       if (!dados.startsWith('data:image/webp')) dados = tela.toDataURL('image/jpeg', qualidade);
-      if (dados.length <= LIMITE_CAPA) return dados;
+      if (dados.length <= limite) return dados;
     }
     largura = Math.round(largura * 0.75);
   }
@@ -141,7 +141,7 @@ async function prepararJogo(itens) {
     if (caminho.split('/').some((p) => p === '__MACOSX' || p === '.DS_Store' || p === 'Thumbs.db')) continue;
     ficheiros[caminho] = new Uint8Array(await item.ficheiro.arrayBuffer());
   }
-  if (itens.length === 1 && /\.html?$/i.test(itens[0].caminho)) {
+  if (itens.length === 1 && /\.html?$/i.test(itens[0].caminho) && itens[0].caminho !== 'index.html') {
     ficheiros['index.html'] = ficheiros[itens[0].caminho];
     delete ficheiros[itens[0].caminho];
   }
@@ -211,7 +211,7 @@ function abrirTeste(url, titulo) {
 
 // ------------------------------------------------------------- Formulário
 
-function formulario({ perfil, jogo, indice, todosJogos, categoriasUsadas, pacoteAtual }) {
+function formulario({ perfil, jogo, indice, todosJogos, categoriasUsadas, pacoteAtual, imagensAtuais }) {
   const editar = Boolean(jogo);
   const aviso = el('div');
   const erro = (texto) => {
@@ -327,6 +327,45 @@ function formulario({ perfil, jogo, indice, todosJogos, categoriasUsadas, pacote
   ficheiroCapa.addEventListener('change', () => usarImagemCapa(ficheiroCapa.files[0]));
   ativarArrastar(zonaCapa, async (dt) => usarImagemCapa(dt.files[0]));
   desenharCapa();
+
+  // --- Galeria (até 4 imagens)
+  const imagens = [...imagensAtuais];
+  const grelhaImagens = el('div', { class: 'galeria editar' });
+  const ficheiroImagens = el('input', { type: 'file', accept: 'image/*', multiple: true, class: 'oculto', tabindex: '-1' });
+  function desenharGaleria() {
+    preencher(grelhaImagens,
+      imagens.map((src, i) => el('div', { class: 'miniatura-galeria' },
+        el('img', { src, alt: `Imagem ${i + 1}` }),
+        el('button', {
+          type: 'button', class: 'botao pequeno secundario remover-imagem', 'aria-label': 'Remover imagem',
+          onclick: () => { imagens.splice(i, 1); desenharGaleria(); },
+        }, icone('lixo')))),
+      imagens.length < 4
+        ? el('button', { type: 'button', class: 'miniatura-galeria adicionar-imagem', onclick: () => ficheiroImagens.click() },
+            icone('mais'), el('span', {}, 'Adicionar'))
+        : null,
+    );
+  }
+  async function adicionarImagens(lista) {
+    for (const ficheiro of [...lista].filter((f) => f.type.startsWith('image/'))) {
+      if (imagens.length >= 4) {
+        erro('A galeria tem no máximo 4 imagens.');
+        break;
+      }
+      try {
+        imagens.push(await prepararCapa(ficheiro, 290_000));
+      } catch (e) {
+        erro(e.message);
+      }
+      desenharGaleria();
+    }
+  }
+  ficheiroImagens.addEventListener('change', () => {
+    adicionarImagens(ficheiroImagens.files);
+    ficheiroImagens.value = '';
+  });
+  ativarArrastar(grelhaImagens, (dt) => adicionarImagens(dt.files));
+  desenharGaleria();
 
   // --- Transferências
   const transferencias = []; // { rotulo: input, url?: input, ficheiro?: File, linha }
@@ -608,6 +647,14 @@ function formulario({ perfil, jogo, indice, todosJogos, categoriasUsadas, pacote
       if (editar) await updateDoc(doc(bd, 'jogos', jogo.id), dados);
       else slug = await criarDocumentoJogo(perfil, dados);
 
+      // Galeria
+      const galeriaMudou = imagens.length !== imagensAtuais.length || imagens.some((src, i) => src !== imagensAtuais[i]);
+      if (galeriaMudou) {
+        progresso(1, 1, 'A guardar as imagens…');
+        if (imagens.length) await setDoc(doc(bd, 'galerias', slug), { imagens });
+        else await deleteDoc(doc(bd, 'galerias', slug)).catch(() => {});
+      }
+
       // 3. Apagar ficheiros antigos que deixaram de ser usados
       if (editar) {
         const usadosAgora = new Set(pacotesDoJogo(dados));
@@ -640,6 +687,9 @@ function formulario({ perfil, jogo, indice, todosJogos, categoriasUsadas, pacote
         el('label', {}, el('span', {}, 'Título'), titulo),
         el('div', { class: 'campo' }, el('label', { class: 'campo' }, el('span', {}, 'Categoria'), categoria), listaCategorias, sugestoes),
         el('div', { class: 'campo' }, el('span', {}, 'Capa ', el('span', { class: 'opcional' }, '(opcional)')), zonaCapa, ficheiroCapa),
+        el('div', { class: 'campo' },
+          el('span', {}, 'Imagens do jogo ', el('span', { class: 'opcional' }, '(opcional, até 4 — arrasta capturas de ecrã)')),
+          grelhaImagens, ficheiroImagens),
         el('label', {}, el('span', {}, 'Descrição'), descricao),
         el('label', {}, el('span', {}, 'Como jogar ', el('span', { class: 'opcional' }, '(opcional)')), instrucoes),
       ),
@@ -711,11 +761,16 @@ try {
     const categoriasUsadas = [...new Set(todosJogos.map((j) => j.categoria))];
     let jogo = null;
     let pacoteAtual = null;
+    let imagensAtuais = [];
     if (id) {
       const documento = await getDoc(doc(bd, 'jogos', id));
       const dados = documento.exists() ? documento.data() : null;
       const permitido = dados && ((dados.autor_uid === perfil.uid && pode(perfil, 'publicar')) || pode(perfil, 'editar_todos'));
       if (permitido) jogo = { id: documento.id, ...dados };
+      if (jogo) {
+        const galeria = await getDoc(doc(bd, 'galerias', jogo.id)).catch(() => null);
+        if (galeria?.exists()) imagensAtuais = galeria.data().imagens || [];
+      }
       if (jogo?.tipo === 'pacote') {
         const info = await getDoc(doc(bd, 'pacotes', jogo.pacote.id)).catch(() => null);
         if (info?.exists()) pacoteAtual = { nome: info.data().nome, tamanho: info.data().tamanho };
@@ -729,7 +784,7 @@ try {
       preencher(conteudo, paginaErro(403, 'A tua conta não tem permissão para publicar jogos.'));
     } else {
       definirTitulo(jogo ? `Editar ${jogo.titulo}` : 'Publicar jogo');
-      preencher(conteudo, formulario({ perfil, jogo, indice, todosJogos, categoriasUsadas, pacoteAtual }));
+      preencher(conteudo, formulario({ perfil, jogo, indice, todosJogos, categoriasUsadas, pacoteAtual, imagensAtuais }));
     }
   }
 } catch (erro) {

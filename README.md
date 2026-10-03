@@ -12,13 +12,28 @@ Funciona 100% no plano gratuito do Firebase (Spark):
 
 ## Funcionalidades
 
-- **Sem conta para jogar:** os visitantes entram como **convidados**. Só os autores precisam de entrar.
-- Tema **claro** por omissão, com botão para o tema escuro (fica guardado no browser).
-- Página inicial com jogo em destaque, pesquisa, categorias e ordenação (mais recentes / mais jogados).
-- Página de cada jogo: jogar no browser (com ecrã inteiro) e/ou **transferir** (`.exe`, `.zip`, `.apk`…).
-- **Capa arrastada** diretamente no formulário (a imagem é reduzida automaticamente).
-- **Categoria livre**: escolhe uma sugestão ou escreve qualquer estilo.
-- **Administração** (`/admin`): ver, editar e remover os jogos de todos, gerir utilizadores e as permissões de cada um.
+**Para quem joga (sem conta, como convidado):**
+- Página inicial com jogo em destaque, **pesquisa instantânea**, categorias e ordenação (recentes, mais jogados, **mais gostados**).
+- **Continuar a jogar** e **Os teus favoritos** (guardados no browser de cada pessoa).
+- Página do jogo: jogar no browser (com ecrã inteiro) e/ou transferir, **gostos ❤**, **partilhar**,
+  **galeria de imagens** com ampliação, **comentários** e jogos semelhantes.
+- Selos **Novo** (primeira semana) e **Atualizado**.
+- Tema claro por omissão, com tema escuro opcional. **Instalável como app** no telemóvel e no computador.
+
+**Para os autores:**
+- Publicar arrastando o jogo (pasta, `.zip`, `.html`) e as transferências (`.exe`, `.apk`…), com teste antes de publicar.
+- Capa e até 4 imagens de galeria arrastadas; categoria livre; rascunhos.
+- Apagar comentários dos próprios jogos.
+
+**Para o administrador (`/admin`):**
+- Estatísticas (jogos, jogadas, gostos, autores) e **espaço usado** face ao limite gratuito de 1 GB.
+- Todos os jogos com filtro, editar e remover; criar contas; permissões de cada utilizador.
+
+## Cópias de segurança
+
+Antes de grandes alterações é guardada uma cópia do código num ramo `backup/AAAA-MM-DD` no GitHub
+(ex.: [`backup/2026-10-03`](https://github.com/mello13256/Plataforma-online-MJ/tree/backup/2026-10-03)).
+Para voltar a essa versão, pede para repor o ramo principal a partir desse ramo.
 
 ---
 

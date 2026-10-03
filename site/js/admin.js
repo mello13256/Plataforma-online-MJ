@@ -1,7 +1,7 @@
 import { bd, collection, criarConta, deleteDoc, doc, getDocs, setDoc, updateDoc } from './firebase.js';
 import {
-  PERMISSOES, UID_DONO, capa, carregarAutores, criarSlug, definirTitulo, el, eliminarJogo, exigirPerfil, formatarNumero, icone,
-  iniciais, mensagem, paginaErro, pode, preencher, traduzirErro, vazio,
+  PERMISSOES, UID_DONO, capa, carregarAutores, criarSlug, definirTitulo, el, eliminarJogo, exigirPerfil, formatarNumero, formatarTamanho, icone,
+  iniciais, mensagem, normalizar, paginaErro, pode, preencher, traduzirErro, vazio,
 } from './comum.js';
 
 const conteudo = document.getElementById('conteudo');
@@ -56,9 +56,16 @@ function separadorJogos({ perfil, jogos, autores, aviso }) {
       preencher(aviso, mensagem('erro-form', traduzirErro(erro)));
     }
   };
+  const filtro = el('input', { type: 'search', placeholder: 'Filtrar por título, autor ou categoria…', 'aria-label': 'Filtrar jogos' });
+  filtro.addEventListener('input', () => {
+    const termo = normalizar(filtro.value.trim());
+    for (const linha of filtro.closest('.formulario').querySelectorAll('tbody tr')) {
+      linha.hidden = Boolean(termo) && !normalizar(linha.textContent).includes(termo);
+    }
+  });
   return el('div', { class: 'formulario' },
     el('div', { class: 'cabecalho-seccao' },
-      el('p', {}, `${jogos.length} jogos no total, de todos os autores.`),
+      el('div', { style: 'flex:1;max-width:420px' }, filtro),
       pode(perfil, 'publicar') ? el('a', { class: 'botao', href: '/editar' }, icone('mais'), 'Adicionar jogo') : null,
     ),
     jogos.length
@@ -204,11 +211,33 @@ function separadorUtilizadores({ autores, aviso, recarregar }) {
 }
 
 async function mostrar(perfil, separador = 'jogos', avisoInicial = null) {
-  const [resultado, autores] = await Promise.all([getDocs(collection(bd, 'jogos')), carregarAutores()]);
+  const [resultado, autores, pacotes] = await Promise.all([
+    getDocs(collection(bd, 'jogos')),
+    carregarAutores(),
+    getDocs(collection(bd, 'pacotes')).catch(() => null),
+  ]);
   const jogos = resultado.docs
     .map((d) => ({ id: d.id, ...d.data() }))
     .sort((a, b) => (b.atualizado_em?.toMillis() || 0) - (a.atualizado_em?.toMillis() || 0));
   const aviso = el('div', {}, avisoInicial);
+  const espacoUsado = (pacotes?.docs || []).reduce((soma, d) => soma + (d.data().tamanho || 0), 0)
+    + jogos.reduce((soma, j) => soma + (j.capa_imagem?.length || 0), 0);
+  const LIMITE_ESPACO = 1024 * 1024 * 1024;
+  const percentagem = Math.min(100, (espacoUsado / LIMITE_ESPACO) * 100);
+  const cartaoNumero = (nomeIcone, valor, rotulo) => el('div', { class: 'cartao-numero' },
+    icone(nomeIcone), el('strong', {}, valor), el('span', {}, rotulo));
+  const estatisticas = el('section', { class: 'painel-numeros' },
+    cartaoNumero('comando', formatarNumero(jogos.filter((j) => j.publicado).length), `jogos publicados${jogos.some((j) => !j.publicado) ? ` · ${jogos.filter((j) => !j.publicado).length} rascunhos` : ''}`),
+    cartaoNumero('jogar', formatarNumero(jogos.reduce((soma, j) => soma + (j.jogadas || 0), 0)), 'jogadas'),
+    cartaoNumero('coracao', formatarNumero(jogos.reduce((soma, j) => soma + (j.gostos || 0), 0)), 'gostos'),
+    cartaoNumero('utilizadores', formatarNumero(autores.size), 'autores'),
+    el('div', { class: 'cartao-numero largo' },
+      icone('grafico'),
+      el('strong', {}, `${formatarTamanho(espacoUsado)} de 1 GB`),
+      el('span', {}, 'espaço gratuito usado pelos ficheiros carregados'),
+      el('div', { class: `barra-espaco ${percentagem > 80 ? 'cheia' : ''}` }, el('div', { style: `width:${Math.max(1, percentagem).toFixed(1)}%` })),
+    ),
+  );
   const recarregar = (msg) => mostrar(perfil, 'utilizadores', msg ?? null);
 
   const paineis = {
@@ -228,6 +257,7 @@ async function mostrar(perfil, separador = 'jogos', avisoInicial = null) {
     el('div', { class: 'cabecalho-seccao' },
       el('div', {}, el('h1', {}, 'Administração'), el('p', {}, 'Gere todos os jogos, os utilizadores e o que cada um pode fazer.')),
     ),
+    estatisticas,
     aviso,
     el('div', { class: 'formulario' }, el('div', { class: 'separadores', role: 'tablist' }, botoes.jogos, botoes.utilizadores), zona),
   );

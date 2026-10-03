@@ -41,6 +41,11 @@ const ICONES = {
   certo: '<path d="M20 6L9 17l-5-5"/>',
   seta: '<path d="M19 12H5M12 19l-7-7 7-7"/>',
   estrela: '<path d="M12 2l3 6.9 7.5.7-5.7 5 1.7 7.4L12 18l-6.5 4 1.7-7.4-5.7-5 7.5-.7z"/>',
+  coracao: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/>',
+  partilhar: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>',
+  mensagem: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  relogio: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  grafico: '<path d="M3 3v18h18M7 15l4-4 3 3 5-6"/>',
 };
 
 export function icone(nome) {
@@ -74,6 +79,58 @@ export function el(etiqueta, atributos = {}, ...filhos) {
 // Substitui o conteúdo de um elemento, ignorando partes vazias (null/false).
 export function preencher(contentor, ...filhos) {
   contentor.replaceChildren(...filhos.flat(Infinity).filter((f) => f != null && f !== false));
+}
+
+// Pequena notificação no canto do ecrã.
+export function notificar(texto, tipo = 'sucesso') {
+  let zona = document.querySelector('.notificacoes');
+  if (!zona) {
+    zona = el('div', { class: 'notificacoes', role: 'status', 'aria-live': 'polite' });
+    document.body.append(zona);
+  }
+  const nota = el('div', { class: `notificacao ${tipo}` }, icone(tipo === 'sucesso' ? 'certo' : 'alerta'), texto);
+  zona.append(nota);
+  setTimeout(() => nota.classList.add('a-sair'), 2800);
+  setTimeout(() => nota.remove(), 3200);
+}
+
+// Listas guardadas no browser de quem visita (favoritos, jogados recentemente…).
+export function lerLista(chave) {
+  try {
+    const valor = JSON.parse(localStorage.getItem(chave) || '[]');
+    return Array.isArray(valor) ? valor : [];
+  } catch {
+    return [];
+  }
+}
+
+export function guardarLista(chave, lista) {
+  try {
+    localStorage.setItem(chave, JSON.stringify(lista));
+  } catch {
+    // sem armazenamento: não faz mal
+  }
+}
+
+export function registarJogado(slug) {
+  guardarLista('jogados', [slug, ...lerLista('jogados').filter((s) => s !== slug)].slice(0, 12));
+}
+
+export async function partilhar(titulo, url = location.href) {
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: titulo, url });
+      return;
+    } catch (erro) {
+      if (erro.name === 'AbortError') return;
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    notificar('Ligação copiada! Já a podes colar onde quiseres.');
+  } catch {
+    prompt('Copia esta ligação:', url);
+  }
 }
 
 export function definirTitulo(titulo) {
@@ -171,8 +228,21 @@ export function capa(jogo, classe = '') {
   return el('div', { class: `${classe} capa-vazia`, 'aria-hidden': 'true' }, jogo.titulo.slice(0, 1).toUpperCase());
 }
 
+const DIA = 24 * 60 * 60 * 1000;
+
+// «Novo» nos primeiros 7 dias; «Atualizado» se mudou nos últimos 7 dias.
+export function novidade(jogo) {
+  const criado = jogo.criado_em?.toMillis?.() || 0;
+  const atualizado = jogo.atualizado_em?.toMillis?.() || 0;
+  if (Date.now() - criado < 7 * DIA) return 'Novo';
+  if (Date.now() - atualizado < 7 * DIA && atualizado - criado > DIA) return 'Atualizado';
+  return null;
+}
+
 export function selos(jogo) {
+  const etiqueta = novidade(jogo);
   return el('div', { class: 'selos' },
+    etiqueta ? el('span', { class: `selo destaque-selo ${etiqueta === 'Novo' ? 'novo' : ''}` }, etiqueta) : null,
     jogavelNoBrowser(jogo) ? el('span', { class: 'selo' }, icone('browser'), 'Browser') : null,
     jogo.transferencias?.length ? el('span', { class: 'selo' }, icone('transferir'), 'Transferir') : null,
   );
@@ -184,7 +254,9 @@ export function cartaoJogo(jogo, autores) {
     el('a', { href: `/jogo/${jogo.id}`, class: 'cartao-ligacao' },
       el('div', { class: 'cartao-imagem' }, capa(jogo), selos(jogo)),
       el('div', { class: 'cartao-corpo' },
-        el('h3', {}, jogo.titulo),
+        el('div', { class: 'cartao-linha' },
+          el('h3', {}, jogo.titulo),
+          jogo.gostos ? el('span', { class: 'contador-gostos', title: 'Gostos' }, icone('coracao'), formatarNumero(jogo.gostos)) : null),
         el('p', { class: 'meta' }, autor ? `${jogo.categoria} · ${autor.nome}` : jogo.categoria),
       ),
     ),
@@ -243,6 +315,10 @@ export async function transferirFicheiro(url, aoProgresso = () => {}) {
 
 // Elimina um jogo e os ficheiros que foram carregados para ele.
 export async function eliminarJogo(jogo) {
+  // A galeria e os comentários primeiro: as regras confirmam o autor através do jogo.
+  await deleteDoc(doc(bd, 'galerias', jogo.id)).catch(() => {});
+  const comentarios = await getDocs(collection(bd, 'jogos', jogo.id, 'comentarios')).catch(() => null);
+  await Promise.all((comentarios?.docs || []).map((d) => deleteDoc(d.ref).catch(() => {})));
   await deleteDoc(doc(bd, 'jogos', jogo.id));
   await Promise.all(pacotesDoJogo(jogo).map((id) => apagarPacote(id).catch(() => {})));
 }
@@ -386,6 +462,23 @@ function montarEstrutura() {
   );
   document.body.prepend(el('a', { class: 'saltar', href: '#conteudo' }, 'Saltar para o conteúdo'), topo);
   document.body.append(rodape);
+
+  // App instalável: o service worker regista-se em todas as páginas e o botão
+  // «Instalar app» aparece quando o browser o permite.
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+  window.addEventListener('beforeinstallprompt', (evento) => {
+    evento.preventDefault();
+    const botao = el('button', {
+      type: 'button',
+      class: 'botao pequeno secundario',
+      onclick: async () => {
+        evento.prompt();
+        await evento.userChoice;
+        botao.remove();
+      },
+    }, icone('transferir'), 'Instalar app');
+    rodape.firstChild.append(botao);
+  });
 
   utilizadorAtual.then(async (utilizador) => {
     if (!utilizador) return;
