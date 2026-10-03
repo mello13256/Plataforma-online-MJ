@@ -40,10 +40,9 @@ O dono da plataforma (Miguel) é sempre administrador. Em **Administração → 
 | Eliminar jogos de todos | Remover jogos de outros autores |
 | Administrador | Tudo o que está acima + gerir utilizadores e permissões |
 
-**Adicionar alguém:**
-1. Em **Administração → Utilizadores → Adicionar utilizador**, indica o email, o nome e as permissões.
-2. Cria a conta com esse email na [consola do Firebase → Authentication → Adicionar utilizador](https://console.firebase.google.com/project/plataforma-web-mj/authentication/users) e envia a palavra-passe à pessoa.
-3. Na primeira vez que entrar, a conta fica automaticamente com as permissões escolhidas.
+**Criar uma conta:** em **Administração → Utilizadores → Criar conta**, indica o email, o nome e as permissões.
+A palavra-passe inicial é gerada automaticamente (podes mudá-la). A conta fica logo ativa e aparece uma mensagem
+pronta a copiar e enviar à pessoa, que depois muda a palavra-passe em **A minha conta**.
 
 **Remover alguém:** botão **Remover** na mesma página (os jogos dessa pessoa continuam publicados).
 
@@ -107,6 +106,6 @@ firebase.json        configuração do Hosting (endereços, cabeçalhos)
 
 - Cada ação é verificada pelas regras do Firestore conforme as permissões do utilizador; o dono nunca perde a administração.
 - Os rascunhos só são visíveis para os autores; os convidados só podem somar +1 ao contador de jogadas.
-- O registo público está desligado: ninguém cria conta sozinho.
+- Contas novas só ganham acesso quando o administrador lhes atribui um perfil; uma conta sem perfil vê o mesmo que um convidado.
 - As regras validam todos os campos (categorias, tamanhos, caminhos e ligações `http(s)`).
 - Os jogos do repositório correm no mesmo domínio do site. Como só quem tem acesso ao repositório os pode adicionar, isto é seguro — não dês acesso ao repositório a quem não confias.

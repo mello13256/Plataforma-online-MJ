@@ -1,11 +1,16 @@
-import { bd, collection, deleteDoc, doc, getDocs, serverTimestamp, setDoc, updateDoc } from './firebase.js';
+import { bd, collection, criarConta, deleteDoc, doc, getDocs, setDoc, updateDoc } from './firebase.js';
 import {
   PERMISSOES, UID_DONO, capa, carregarAutores, criarSlug, definirTitulo, el, exigirPerfil, formatarNumero, icone,
   iniciais, mensagem, paginaErro, pode, preencher, traduzirErro, vazio,
 } from './comum.js';
 
 const conteudo = document.getElementById('conteudo');
-const CONSOLA_UTILIZADORES = 'https://console.firebase.google.com/project/plataforma-web-mj/authentication/users';
+
+function gerarPalavraPasse() {
+  const letras = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const aleatorio = crypto.getRandomValues(new Uint32Array(12));
+  return Array.from(aleatorio, (n) => letras[n % letras.length]).join('');
+}
 
 definirTitulo('Administração');
 
@@ -81,7 +86,7 @@ function separadorJogos({ perfil, jogos, autores, aviso }) {
   );
 }
 
-function separadorUtilizadores({ autores, convites, aviso, recarregar }) {
+function separadorUtilizadores({ autores, aviso, recarregar }) {
   // --- Utilizadores existentes
   const linhas = [...autores.values()]
     .sort((a, b) => (a.uid === UID_DONO ? -1 : b.uid === UID_DONO ? 1 : a.nome.localeCompare(b.nome)))
@@ -126,26 +131,6 @@ function separadorUtilizadores({ autores, convites, aviso, recarregar }) {
       );
     });
 
-  // --- Convites pendentes
-  const listaConvites = convites.length
-    ? el('div', { class: 'tabela-contentor' },
-        el('table', { class: 'tabela' },
-          el('thead', {}, el('tr', {}, el('th', {}, 'Email'), el('th', {}, 'Nome'), el('th', {}, 'Permissões'), el('th', {}, el('span', { class: 'oculto' }, 'Ações')))),
-          el('tbody', {}, convites.map((c) => el('tr', {},
-            el('td', {}, c.email),
-            el('td', {}, `${c.nome} (@${c.utilizador})`),
-            el('td', {}, PERMISSOES.filter((p) => c.permissoes?.[p.chave]).map((p) => p.nome).join(', ') || 'Nenhuma'),
-            el('td', { class: 'acoes-linha' }, el('button', {
-              class: 'botao pequeno perigo',
-              type: 'button',
-              onclick: async () => {
-                await deleteDoc(doc(bd, 'convites', c.email)).catch(() => {});
-                recarregar();
-              },
-            }, 'Cancelar')),
-          )))))
-    : null;
-
   // --- Adicionar utilizador
   const email = el('input', { type: 'email', required: true, placeholder: 'email@exemplo.pt' });
   const nome = el('input', { required: true, maxlength: '40', placeholder: 'Ex.: Ana Silva' });
@@ -154,11 +139,14 @@ function separadorUtilizadores({ autores, convites, aviso, recarregar }) {
     if (!nomeUtilizador.dataset.editado) nomeUtilizador.value = criarSlug(nome.value.split(' ')[0] || '').replace(/-/g, '').slice(0, 30);
   });
   nomeUtilizador.addEventListener('input', () => { nomeUtilizador.dataset.editado = '1'; });
+  const palavraPasse = el('input', { required: true, minlength: '8', maxlength: '64', autocomplete: 'off', value: gerarPalavraPasse() });
   const novasPermissoes = caixasPermissoes({ publicar: true });
+  const botaoCriar = el('button', { class: 'botao', type: 'submit' }, icone('mais'), 'Criar conta');
   const adicionar = async (evento) => {
     evento.preventDefault();
-    const chave = email.value.trim().toLowerCase();
+    const endereco = email.value.trim().toLowerCase();
     const utilizador = nomeUtilizador.value.trim().toLowerCase();
+    const nomeFinal = nome.value.trim();
     if (!/^[a-z0-9_.-]{2,30}$/.test(utilizador)) {
       preencher(aviso, mensagem('erro-form', 'O nome de utilizador só pode ter letras minúsculas sem acentos, números, «.», «_» e «-».'));
       return;
@@ -167,17 +155,29 @@ function separadorUtilizadores({ autores, convites, aviso, recarregar }) {
       preencher(aviso, mensagem('erro-form', `Já existe um autor com o nome de utilizador «${utilizador}».`));
       return;
     }
+    if (palavraPasse.value.length < 8) {
+      preencher(aviso, mensagem('erro-form', 'A palavra-passe tem de ter pelo menos 8 caracteres.'));
+      return;
+    }
+    botaoCriar.disabled = true;
     try {
-      await setDoc(doc(bd, 'convites', chave), {
-        email: chave, nome: nome.value.trim(), utilizador, permissoes: novasPermissoes.valor(), criado_em: serverTimestamp(),
-      });
-      recarregar(mensagem('sucesso', el('div', {},
-        el('strong', {}, `${nome.value.trim()} foi adicionado. `),
-        'Último passo: cria a conta com o email ', el('strong', {}, chave), ' na ',
-        el('a', { href: CONSOLA_UTILIZADORES, target: '_blank', rel: 'noopener' }, 'consola do Firebase → Adicionar utilizador'),
-        ' e envia-lhe a palavra-passe. Na primeira vez que entrar, fica com estas permissões.')));
+      const uid = await criarConta(endereco, palavraPasse.value);
+      await setDoc(doc(bd, 'autores', uid), { nome: nomeFinal, utilizador, permissoes: novasPermissoes.valor() });
+      const texto = `Olá ${nomeFinal.split(' ')[0]}! Já tens conta no Jogos MJ.\nEntra em ${location.origin}/entrar\nEmail: ${endereco}\nPalavra-passe: ${palavraPasse.value}\n(Muda-a em «A minha conta».)`;
+      recarregar(mensagem('sucesso', el('div', { class: 'formulario', style: 'gap:.6rem' },
+        el('strong', {}, `Conta de ${nomeFinal} criada.`),
+        el('span', {}, 'Envia-lhe estes dados (a palavra-passe não volta a ser mostrada):'),
+        el('pre', { class: 'copiavel', style: 'margin:0;white-space:pre-wrap;font:inherit' }, texto),
+        el('div', {}, el('button', {
+          type: 'button',
+          class: 'botao pequeno secundario',
+          onclick: (e) => navigator.clipboard?.writeText(texto).then(() => { e.target.textContent = 'Copiado ✓'; }),
+        }, 'Copiar mensagem')),
+      )));
     } catch (erro) {
+      botaoCriar.disabled = false;
       preencher(aviso, mensagem('erro-form', traduzirErro(erro)));
+      aviso.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   };
 
@@ -188,26 +188,23 @@ function separadorUtilizadores({ autores, convites, aviso, recarregar }) {
         el('tbody', {}, linhas))),
     el('div', { class: 'grelha-permissoes ajuda' },
       PERMISSOES.map((p) => el('div', {}, el('strong', {}, `${p.nome}: `), p.descricao))),
-    listaConvites ? el('section', { class: 'formulario' }, el('h2', {}, 'À espera da primeira entrada'), listaConvites) : null,
     el('form', { class: 'cartao-form formulario', onsubmit: adicionar },
-      el('h2', {}, 'Adicionar utilizador'),
+      el('div', {}, el('h2', {}, 'Criar conta'), el('p', { class: 'ajuda' }, 'A conta fica logo ativa. Depois envias o email e a palavra-passe à pessoa.')),
       el('div', { class: 'escolhas' },
         el('label', { class: 'campo' }, el('span', {}, 'Email'), email),
         el('label', { class: 'campo' }, el('span', {}, 'Nome'), nome),
         el('label', { class: 'campo' }, el('span', {}, 'Nome de utilizador'), nomeUtilizador),
+        el('label', { class: 'campo' }, el('span', {}, 'Palavra-passe inicial'), palavraPasse,
+          el('button', { type: 'button', class: 'ligacao', style: 'justify-self:start;font-size:.88rem', onclick: () => { palavraPasse.value = gerarPalavraPasse(); } }, 'Gerar outra')),
       ),
       el('div', { class: 'campo' }, el('span', {}, 'Permissões'), novasPermissoes.contentor),
-      el('div', {}, el('button', { class: 'botao', type: 'submit' }, icone('mais'), 'Adicionar utilizador')),
+      el('div', {}, botaoCriar),
     ),
   );
 }
 
 async function mostrar(perfil, separador = 'jogos', avisoInicial = null) {
-  const [resultado, autores, convites] = await Promise.all([
-    getDocs(collection(bd, 'jogos')),
-    carregarAutores(),
-    getDocs(collection(bd, 'convites')).then((r) => r.docs.map((d) => d.data())).catch(() => []),
-  ]);
+  const [resultado, autores] = await Promise.all([getDocs(collection(bd, 'jogos')), carregarAutores()]);
   const jogos = resultado.docs
     .map((d) => ({ id: d.id, ...d.data() }))
     .sort((a, b) => (b.atualizado_em?.toMillis() || 0) - (a.atualizado_em?.toMillis() || 0));
@@ -216,7 +213,7 @@ async function mostrar(perfil, separador = 'jogos', avisoInicial = null) {
 
   const paineis = {
     jogos: separadorJogos({ perfil, jogos, autores, aviso }),
-    utilizadores: separadorUtilizadores({ autores, convites, aviso, recarregar }),
+    utilizadores: separadorUtilizadores({ autores, aviso, recarregar }),
   };
   const zona = el('div');
   const botoes = {};

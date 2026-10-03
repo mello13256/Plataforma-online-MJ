@@ -37,10 +37,6 @@ service cloud.firestore {
         && (permissoes().get('admin', false) == true || permissoes().get(permissao, false) == true));
     }
 
-    function emailAtual() {
-      return request.auth.token.get('email', '').lower();
-    }
-
     function textoAte(valor, maximo) {
       return valor is string && valor.size() <= maximo;
     }
@@ -69,13 +65,9 @@ service cloud.firestore {
     match /autores/{uid} {
       allow read: if true;
 
-      // Primeira entrada de alguém convidado: cria o próprio perfil a partir do convite.
-      allow create: if request.auth != null && request.auth.uid == uid
-        && exists(/databases/$(database)/documents/convites/$(emailAtual()))
-        && perfilValido(request.resource.data)
-        && request.resource.data.nome == get(/databases/$(database)/documents/convites/$(emailAtual())).data.nome
-        && request.resource.data.utilizador == get(/databases/$(database)/documents/convites/$(emailAtual())).data.utilizador
-        && request.resource.data.permissoes == get(/databases/$(database)/documents/convites/$(emailAtual())).data.permissoes;
+      // Os perfis são criados pelo administrador (página Administração → Utilizadores).
+      // Uma conta sem perfil não tem acesso a nada além do que um convidado vê.
+      allow create: if pode('admin') && perfilValido(request.resource.data);
 
       allow update: if (
           // cada um pode mudar o próprio nome
@@ -89,20 +81,6 @@ service cloud.firestore {
         );
 
       allow delete: if pode('admin') && uid != uidDono();
-    }
-
-    // --------------------------------------------------------------- convites
-    // ID do documento = email (em minúsculas) da pessoa convidada.
-    match /convites/{email} {
-      allow read: if pode('admin') || (request.auth != null && emailAtual() == email);
-      allow create, update: if pode('admin')
-        && request.resource.data.keys().hasOnly(['email', 'nome', 'utilizador', 'permissoes', 'criado_em'])
-        && request.resource.data.email == email
-        && email.matches('^[^@\\s]+@[^@\\s]+$')
-        && textoEntre(request.resource.data.nome, 1, 40)
-        && request.resource.data.utilizador is string && request.resource.data.utilizador.matches('^[a-z0-9_.-]{2,30}$')
-        && permissoesValidas(request.resource.data.permissoes);
-      allow delete: if pode('admin') || (request.auth != null && emailAtual() == email);
     }
 
     // ------------------------------------------------------------------ jogos

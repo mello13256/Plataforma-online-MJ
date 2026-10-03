@@ -56,9 +56,6 @@ beforeEach(async () => {
     await setDoc(doc(bd, 'autores/bloqueado'), perfil('Bloqueado', 'bloqueado', { publicar: false }));
     await setDoc(doc(bd, 'jogos/publicado'), { ...jogoBase(), criado_em: agora, atualizado_em: agora });
     await setDoc(doc(bd, 'jogos/rascunho'), { ...jogoBase({ publicado: false }), criado_em: agora, atualizado_em: agora });
-    await setDoc(doc(bd, 'convites/novo@exemplo.pt'), {
-      email: 'novo@exemplo.pt', nome: 'Novo', utilizador: 'novo', permissoes: { publicar: true }, criado_em: agora,
-    });
   });
 });
 
@@ -156,24 +153,15 @@ describe('utilizadores e permissões', () => {
     await assertFails(deleteDoc(doc(como('joel'), `autores/${DONO}`)));
   });
 
-  it('só o administrador cria convites', async () => {
-    const convite = { email: 'amigo@exemplo.pt', nome: 'Amigo', utilizador: 'amigo', permissoes: { publicar: true }, criado_em: serverTimestamp() };
-    await assertSucceeds(setDoc(doc(como(DONO), 'convites/amigo@exemplo.pt'), convite));
-    await assertFails(setDoc(doc(como('joel'), 'convites/amigo@exemplo.pt'), convite));
-    await assertFails(setDoc(doc(como(DONO), 'convites/outro@exemplo.pt'), convite));
-    await assertFails(getDocs(collection(como('joel'), 'convites')));
+  it('só o administrador cria perfis para contas novas', async () => {
+    const novo = perfil('Ana', 'ana', { publicar: true });
+    await assertSucceeds(setDoc(doc(como(DONO), 'autores/uid-ana'), novo));
+    await assertFails(setDoc(doc(como('joel'), 'autores/uid-x'), novo));
+    await assertFails(setDoc(doc(como(DONO), 'autores/uid-y'), perfil('Ana', 'Ana Maiúsculas', { publicar: true })));
   });
 
-  it('a pessoa convidada cria o perfil exatamente como no convite', async () => {
-    const novo = como('uid-novo', 'novo@exemplo.pt');
-    await assertSucceeds(getDoc(doc(novo, 'convites/novo@exemplo.pt')));
-    await assertFails(setDoc(doc(novo, 'autores/uid-novo'), perfil('Novo', 'novo', { admin: true })));
-    await assertSucceeds(setDoc(doc(novo, 'autores/uid-novo'), perfil('Novo', 'novo', { publicar: true })));
-    await assertSucceeds(deleteDoc(doc(novo, 'convites/novo@exemplo.pt')));
-  });
-
-  it('sem convite não se cria perfil', async () => {
+  it('uma conta nova não cria o próprio perfil', async () => {
     await assertFails(setDoc(doc(como('intruso', 'intruso@exemplo.pt'), 'autores/intruso'), perfil('Eu', 'eu', { publicar: true })));
-    await assertFails(setDoc(doc(como('uid-x', 'novo@exemplo.pt'), 'autores/outro-uid'), perfil('Novo', 'novo', { publicar: true })));
+    await assertFails(setDoc(doc(como('intruso'), 'jogos/x'), jogoBase({ autor_uid: 'intruso' })));
   });
 });

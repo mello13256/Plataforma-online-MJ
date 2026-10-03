@@ -1,7 +1,5 @@
 // Funções partilhadas por todas as páginas: topo, rodapé, tema, formatação, permissões e cartões.
-import {
-  auth, bd, collection, deleteDoc, doc, getDoc, getDocs, onAuthStateChanged, setDoc, signOut,
-} from './firebase.js';
+import { auth, bd, collection, doc, getDoc, getDocs, onAuthStateChanged, signOut } from './firebase.js';
 
 export const NOME_SITE = 'Jogos MJ';
 export const REPOSITORIO = 'https://github.com/mello13256/Plataforma-online-MJ';
@@ -231,29 +229,13 @@ export function pode(perfil, permissao) {
 
 let perfilEmCache;
 
-// Devolve o perfil de autor da sessão atual (ou null). Na primeira entrada de
-// alguém convidado, cria o perfil a partir do convite.
+// Devolve o perfil de autor da sessão atual (ou null).
 export function obterPerfil() {
   perfilEmCache ??= (async () => {
     const utilizador = await utilizadorAtual;
     if (!utilizador) return null;
-    const ref = doc(bd, 'autores', utilizador.uid);
-    const existente = await getDoc(ref);
-    if (existente.exists()) return { uid: utilizador.uid, ...existente.data() };
-
-    const email = (utilizador.email || '').toLowerCase();
-    if (!email) return null;
-    try {
-      const convite = await getDoc(doc(bd, 'convites', email));
-      if (!convite.exists()) return null;
-      const { nome, utilizador: nomeUtilizador, permissoes } = convite.data();
-      const perfil = { nome, utilizador: nomeUtilizador, permissoes };
-      await setDoc(ref, perfil);
-      await deleteDoc(doc(bd, 'convites', email)).catch(() => {});
-      return { uid: utilizador.uid, ...perfil };
-    } catch {
-      return null;
-    }
+    const existente = await getDoc(doc(bd, 'autores', utilizador.uid));
+    return existente.exists() ? { uid: utilizador.uid, ...existente.data() } : null;
   })();
   return perfilEmCache;
 }
@@ -287,6 +269,9 @@ export function traduzirErro(erro) {
       'auth/invalid-email': 'O email não é válido.',
       'auth/too-many-requests': 'Demasiadas tentativas. Tenta novamente daqui a alguns minutos.',
       'auth/weak-password': 'A palavra-passe é demasiado fraca (mínimo 8 caracteres).',
+      'auth/email-already-in-use': 'Já existe uma conta com este email.',
+      'auth/operation-not-allowed': 'A criação de contas está desligada no Firebase.',
+      'auth/admin-restricted-operation': 'A criação de contas está desligada no Firebase.',
       'auth/requires-recent-login': 'Por segurança, termina a sessão e volta a entrar antes de fazer esta alteração.',
       'auth/network-request-failed': 'Sem ligação ao servidor. Verifica a tua ligação à Internet.',
     }[codigo] || 'Ocorreu um erro ao comunicar com o servidor.';
