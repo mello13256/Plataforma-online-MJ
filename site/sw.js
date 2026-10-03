@@ -103,7 +103,7 @@ function obterJogo(id) {
 
 function paginaErro(mensagem, estado = 404) {
   return new Response(
-    `<!doctype html><meta charset="utf-8"><body style="font-family:system-ui;display:grid;place-items:center;height:100vh;margin:0;background:#0e1020;color:#eceefe;text-align:center"><p>${mensagem.replace(/</g, '&lt;')}</p>`,
+    `<!doctype html><meta charset="utf-8"><body style="font-family:system-ui;display:grid;place-items:center;height:100vh;margin:0;background:#0d0d0d;color:#f2f2f2;text-align:center"><p>${mensagem.replace(/</g, '&lt;')}</p>`,
     { status: estado, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
   );
 }

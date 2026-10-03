@@ -23,25 +23,27 @@
 }
 
 :root[data-tema="escuro"] {
-  --fundo: #0e1020;
-  --superficie: #171a31;
-  --superficie-2: #1f2340;
-  --borda: #2b2f52;
-  --texto: #eceefe;
-  --texto-suave: #a2a7cc;
+  --fundo: #0d0d0d;
+  --superficie: #171717;
+  --superficie-2: #222222;
+  --borda: #2e2e2e;
+  --texto: #f2f2f2;
+  --texto-suave: #a3a3a3;
   --destaque: #8b6dff;
   --destaque-forte: #a48bff;
-  --destaque-suave: #2a2552;
+  --destaque-suave: #221f29;
   --verde: #2fd3a0;
-  --verde-suave: #143a33;
+  --verde-suave: #14271f;
   --amarelo: #ffc84a;
-  --amarelo-suave: #3a3016;
+  --amarelo-suave: #2b2414;
   --perigo: #ff5d73;
-  --perigo-suave: #3d1d27;
-  --sombra: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 24px rgba(0, 0, 0, .25);
-  --sombra-forte: 0 12px 40px rgba(0, 0, 0, .5);
+  --perigo-suave: #2e1a1d;
+  --sombra: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 24px rgba(0, 0, 0, .35);
+  --sombra-forte: 0 12px 40px rgba(0, 0, 0, .6);
   color-scheme: dark;
 }
+
+:root[data-tema="escuro"] .topo { background: color-mix(in srgb, var(--fundo) 88%, transparent); }
 
 /* ------------------------------------------------------------------- Base */
 * { box-sizing: border-box; }
@@ -260,7 +262,7 @@ a.etiqueta:hover, button.etiqueta:hover { color: var(--texto); border-color: var
 .selos { position: absolute; left: .6rem; bottom: .6rem; display: flex; gap: .35rem; }
 .selo {
   display: inline-flex; align-items: center; gap: .3rem; padding: .2rem .55rem; border-radius: 999px; font-size: .75rem; font-weight: 700;
-  background: rgba(15, 17, 35, .72); color: #fff; backdrop-filter: blur(6px);
+  background: rgba(0, 0, 0, .72); color: #fff; backdrop-filter: blur(6px);
 }
 .cartao-corpo { padding: .9rem 1.1rem 1.1rem; display: grid; gap: .3rem; }
 .meta { color: var(--texto-suave); font-size: .88rem; display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; }
@@ -277,7 +279,7 @@ a.etiqueta:hover, button.etiqueta:hover { color: var(--texto); border-color: var
 /* --------------------------------------------------------- Página do jogo */
 .pagina-jogo { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 2rem; align-items: start; }
 .leitor {
-  position: relative; width: 100%; aspect-ratio: 16 / 9; background: #0b0c18; border-radius: 20px; overflow: hidden;
+  position: relative; width: 100%; aspect-ratio: 16 / 9; background: #0a0a0a; border-radius: 20px; overflow: hidden;
   box-shadow: var(--sombra-forte);
 }
 .leitor iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
@@ -418,7 +420,7 @@ img.leitor-fundo { filter: brightness(.55) saturate(1.1); }
   width: min(1100px, 96vw); padding: 0; border: 0; border-radius: 20px; background: var(--superficie); color: var(--texto);
   box-shadow: var(--sombra-forte); overflow: hidden;
 }
-.janela-teste::backdrop { background: rgba(10, 12, 28, .7); backdrop-filter: blur(4px); }
+.janela-teste::backdrop { background: rgba(0, 0, 0, .7); backdrop-filter: blur(4px); }
 .janela-topo { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .8rem 1rem; flex-wrap: wrap; }
 .janela-teste .leitor { border-radius: 0; box-shadow: none; }
 @media (max-width: 900px) {
@@ -466,11 +468,11 @@ button.miniatura-galeria:hover img { transform: scale(1.04); }
 }
 .adicionar-imagem:hover { border-color: var(--destaque); color: var(--destaque); }
 .janela-imagem { padding: 0; border: 0; background: transparent; max-width: 94vw; max-height: 92vh; overflow: visible; }
-.janela-imagem::backdrop { background: rgba(10, 12, 28, .85); }
+.janela-imagem::backdrop { background: rgba(0, 0, 0, .88); }
 .janela-imagem img { display: block; max-width: 94vw; max-height: 88vh; border-radius: 14px; box-shadow: var(--sombra-forte); }
 .seta-galeria, .fechar-galeria {
   position: fixed; top: 50%; transform: translateY(-50%); width: 48px; height: 48px; border-radius: 50%; border: 0;
-  background: rgba(255, 255, 255, .92); color: #171a33; font-size: 1.8rem; line-height: 1; cursor: pointer; box-shadow: var(--sombra);
+  background: rgba(255, 255, 255, .92); color: #111; font-size: 1.8rem; line-height: 1; cursor: pointer; box-shadow: var(--sombra);
 }
 .seta-galeria.anterior { left: 2vw; }
 .seta-galeria.seguinte { right: 2vw; }
