@@ -1,55 +1,158 @@
 rules_version = '2';
 
 // Regras de segurança da base de dados.
-// - Qualquer pessoa vê os jogos publicados e os autores.
-// - Só os autores (documento em /autores/{uid}, criado à mão na consola) publicam e editam jogos.
-// - Cada autor só altera ou elimina os seus próprios jogos.
-// - Visitantes só podem somar +1 ao contador de jogadas de um jogo publicado.
+//
+// Permissões de cada autor (campo «permissoes» em /autores/{uid}):
+//   publicar        publicar jogos e editar/eliminar os próprios
+//   editar_todos    editar jogos de qualquer autor
+//   eliminar_todos  eliminar jogos de qualquer autor
+//   admin           tudo o que está acima + gerir utilizadores e permissões
+// O dono da plataforma (UID abaixo) é sempre administrador e não pode ser removido.
+// Visitantes (convidados) veem os jogos publicados e só podem somar +1 ao contador de jogadas.
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function eAutor() {
-      return request.auth != null
-        && exists(/databases/$(database)/documents/autores/$(request.auth.uid));
+    function uidDono() {
+      return 'PIgsxFjHYDc32oIqh5yD4g7uDmF3';
+    }
+
+    function eDono() {
+      return request.auth != null && request.auth.uid == uidDono();
+    }
+
+    function caminhoPerfil() {
+      return /databases/$(database)/documents/autores/$(request.auth.uid);
+    }
+
+    function temPerfil() {
+      return request.auth != null && exists(caminhoPerfil());
+    }
+
+    function permissoes() {
+      return get(caminhoPerfil()).data.get('permissoes', {'publicar': true});
+    }
+
+    function pode(permissao) {
+      return eDono() || (temPerfil()
+        && (permissoes().get('admin', false) == true || permissoes().get(permissao, false) == true));
+    }
+
+    function emailAtual() {
+      return request.auth.token.get('email', '').lower();
     }
 
     function textoAte(valor, maximo) {
       return valor is string && valor.size() <= maximo;
     }
 
+    function textoEntre(valor, minimo, maximo) {
+      return valor is string && valor.size() >= minimo && valor.size() <= maximo;
+    }
+
+    function permissoesValidas(p) {
+      return p is map
+        && p.keys().hasOnly(['publicar', 'editar_todos', 'eliminar_todos', 'admin'])
+        && p.get('publicar', false) is bool
+        && p.get('editar_todos', false) is bool
+        && p.get('eliminar_todos', false) is bool
+        && p.get('admin', false) is bool;
+    }
+
+    function perfilValido(a) {
+      return a.keys().hasOnly(['nome', 'utilizador', 'permissoes'])
+        && textoEntre(a.nome, 1, 40)
+        && a.utilizador is string && a.utilizador.matches('^[a-z0-9_.-]{2,30}$')
+        && permissoesValidas(a.permissoes);
+    }
+
+    // ---------------------------------------------------------------- autores
+    match /autores/{uid} {
+      allow read: if true;
+
+      // Primeira entrada de alguém convidado: cria o próprio perfil a partir do convite.
+      allow create: if request.auth != null && request.auth.uid == uid
+        && exists(/databases/$(database)/documents/convites/$(emailAtual()))
+        && perfilValido(request.resource.data)
+        && request.resource.data.nome == get(/databases/$(database)/documents/convites/$(emailAtual())).data.nome
+        && request.resource.data.utilizador == get(/databases/$(database)/documents/convites/$(emailAtual())).data.utilizador
+        && request.resource.data.permissoes == get(/databases/$(database)/documents/convites/$(emailAtual())).data.permissoes;
+
+      allow update: if (
+          // cada um pode mudar o próprio nome
+          request.auth != null && request.auth.uid == uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome'])
+          && textoEntre(request.resource.data.nome, 1, 40)
+        ) || (
+          // o administrador gere nomes e permissões (o dono continua sempre administrador)
+          pode('admin') && perfilValido(request.resource.data)
+          && (uid != uidDono() || request.resource.data.permissoes.get('admin', false) == true)
+        );
+
+      allow delete: if pode('admin') && uid != uidDono();
+    }
+
+    // --------------------------------------------------------------- convites
+    // ID do documento = email (em minúsculas) da pessoa convidada.
+    match /convites/{email} {
+      allow read: if pode('admin') || (request.auth != null && emailAtual() == email);
+      allow create, update: if pode('admin')
+        && request.resource.data.keys().hasOnly(['email', 'nome', 'utilizador', 'permissoes', 'criado_em'])
+        && request.resource.data.email == email
+        && email.matches('^[^@\\s]+@[^@\\s]+$')
+        && textoEntre(request.resource.data.nome, 1, 40)
+        && request.resource.data.utilizador is string && request.resource.data.utilizador.matches('^[a-z0-9_.-]{2,30}$')
+        && permissoesValidas(request.resource.data.permissoes);
+      allow delete: if pode('admin') || (request.auth != null && emailAtual() == email);
+    }
+
+    // ------------------------------------------------------------------ jogos
+    function transferenciaValida(t) {
+      return t is map && t.keys().hasOnly(['rotulo', 'url'])
+        && textoEntre(t.rotulo, 1, 60)
+        && textoAte(t.url, 1000) && t.url.matches('^https?://.+');
+    }
+
+    function transferenciasValidas(lista) {
+      return lista is list && lista.size() <= 5
+        && (lista.size() < 1 || transferenciaValida(lista[0]))
+        && (lista.size() < 2 || transferenciaValida(lista[1]))
+        && (lista.size() < 3 || transferenciaValida(lista[2]))
+        && (lista.size() < 4 || transferenciaValida(lista[3]))
+        && (lista.size() < 5 || transferenciaValida(lista[4]));
+    }
+
+    function caminhoSeguro(valor, padrao) {
+      return textoAte(valor, 300) && valor.matches(padrao) && !valor.matches('.*\\.\\..*');
+    }
+
     function jogoValido(j) {
       return j.keys().hasOnly(['titulo', 'descricao', 'instrucoes', 'categoria', 'tipo', 'caminho',
-                               'url_externo', 'capa', 'publicado', 'jogadas', 'autor_uid',
-                               'criado_em', 'atualizado_em'])
-        && textoAte(j.titulo, 80) && j.titulo.size() > 0
+                               'url_externo', 'capa', 'capa_imagem', 'transferencias', 'publicado',
+                               'jogadas', 'autor_uid', 'criado_em', 'atualizado_em'])
+        && textoEntre(j.titulo, 1, 80)
         && textoAte(j.descricao, 5000)
         && textoAte(j.instrucoes, 2000)
-        && j.categoria in ['Ação', 'Aventura', 'Arcada', 'Corrida', 'Desporto', 'Estratégia',
-                           'Multijogador', 'Plataformas', 'Puzzle', 'Terror', 'Outro']
+        && textoEntre(j.categoria, 1, 40)
         && j.publicado is bool
         && j.jogadas is int
-        && (j.capa == null || (textoAte(j.capa, 300)
-              && j.capa.matches('^(jogos|capas)/[^?#:\\\\]+$') && !j.capa.matches('.*\\.\\..*')))
+        && (j.get('capa', null) == null || caminhoSeguro(j.capa, '^(jogos|capas)/[^?#:\\\\]+$'))
+        && (j.get('capa_imagem', null) == null || (j.capa_imagem is string && j.capa_imagem.size() <= 600000
+              && j.capa_imagem.matches('^data:image/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$')))
+        && transferenciasValidas(j.get('transferencias', []))
         && (
-          (j.tipo == 'repositorio' && j.url_externo == null && textoAte(j.caminho, 300)
-            && j.caminho.matches('^jogos/[a-z0-9-]+/[^?#:\\\\]+$') && !j.caminho.matches('.*\\.\\..*'))
-          || (j.tipo == 'ligacao' && j.caminho == null && textoAte(j.url_externo, 500)
+          (j.tipo == 'repositorio' && j.url_externo == null
+            && caminhoSeguro(j.caminho, '^jogos/[a-z0-9-]+/[^?#:\\\\]+$'))
+          || (j.tipo == 'ligacao' && j.caminho == null && textoAte(j.url_externo, 1000)
             && j.url_externo.matches('^https?://.+'))
+          || (j.tipo == 'nenhum' && j.caminho == null && j.url_externo == null
+            && j.get('transferencias', []).size() > 0)
         );
     }
 
-    match /autores/{uid} {
-      allow read: if true;
-      // Os autores são criados na consola do Firebase; cada um só pode mudar o próprio nome.
-      allow update: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome'])
-        && textoAte(request.resource.data.nome, 40) && request.resource.data.nome.size() > 0;
-    }
-
     match /jogos/{slug} {
-      allow read: if resource.data.publicado == true || eAutor();
+      allow read: if resource.data.publicado == true || temPerfil() || eDono();
 
-      allow create: if eAutor()
+      allow create: if pode('publicar')
         && slug.matches('^[a-z0-9-]{1,70}$')
         && jogoValido(request.resource.data)
         && request.resource.data.autor_uid == request.auth.uid
@@ -58,8 +161,7 @@ service cloud.firestore {
         && request.resource.data.atualizado_em == request.time;
 
       allow update: if (
-          eAutor()
-          && resource.data.autor_uid == request.auth.uid
+          ((pode('publicar') && resource.data.autor_uid == request.auth.uid) || pode('editar_todos'))
           && jogoValido(request.resource.data)
           && request.resource.data.autor_uid == resource.data.autor_uid
           && request.resource.data.criado_em == resource.data.criado_em
@@ -71,7 +173,8 @@ service cloud.firestore {
           && request.resource.data.jogadas == resource.data.jogadas + 1
         );
 
-      allow delete: if eAutor() && resource.data.autor_uid == request.auth.uid;
+      allow delete: if (pode('publicar') && resource.data.autor_uid == request.auth.uid)
+        || pode('eliminar_todos');
     }
   }
 }

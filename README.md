@@ -12,12 +12,13 @@ Funciona 100% no plano gratuito do Firebase (Spark):
 
 ## Funcionalidades
 
-- Página inicial com pesquisa, categorias e ordenação (mais recentes / mais jogados).
-- Página de cada jogo com leitor integrado, ecrã inteiro, «Como jogar», contador de jogadas e mais jogos do autor.
-- Página de autor (`/autor/<utilizador>`).
-- Painel de autor: publicar, editar, eliminar e guardar jogos como rascunho.
-- Os jogos ficam na pasta [`jogos/`](jogos/) do repositório (pastas ou `.zip`), ou podem ser uma ligação externa (ex.: itch.io).
-- Sem registo público: só as contas que criarem na consola do Firebase conseguem publicar.
+- **Sem conta para jogar:** os visitantes entram como **convidados**. Só os autores precisam de entrar.
+- Tema **claro** por omissão, com botão para o tema escuro (fica guardado no browser).
+- Página inicial com jogo em destaque, pesquisa, categorias e ordenação (mais recentes / mais jogados).
+- Página de cada jogo: jogar no browser (com ecrã inteiro) e/ou **transferir** (`.exe`, `.zip`, `.apk`…).
+- **Capa arrastada** diretamente no formulário (a imagem é reduzida automaticamente).
+- **Categoria livre**: escolhe uma sugestão ou escreve qualquer estilo.
+- **Administração** (`/admin`): ver, editar e remover os jogos de todos, gerir utilizadores e as permissões de cada um.
 
 ---
 
@@ -28,27 +29,40 @@ Funciona 100% no plano gratuito do Firebase (Spark):
 - **Publicação:** cada alteração no ramo principal do GitHub republica o site (separador **Actions**).
   O GitHub identifica-se no Google sem chaves (Workload Identity Federation): só este repositório tem autorização.
 
-### Adicionar um autor
+## Utilizadores e permissões
 
-O registo público está desligado: as contas são criadas na consola.
+O dono da plataforma (Miguel) é sempre administrador. Em **Administração → Utilizadores** escolhe-se o que cada pessoa pode fazer:
 
-1. **Authentication → Utilizadores → Adicionar utilizador** (email e palavra-passe) e copia o **UID**.
-2. **Firestore Database → coleção `autores` → Adicionar documento**:
-   - **ID do documento**: o UID;
-   - campo `nome` (string): o nome que aparece no site, ex.: `Mello`;
-   - campo `utilizador` (string): nome curto sem espaços, usado em `/autor/...`, ex.: `mello`.
+| Permissão | O que permite |
+| --- | --- |
+| Publicar jogos | Publicar jogos novos e editar/eliminar os próprios |
+| Editar jogos de todos | Alterar jogos de outros autores |
+| Eliminar jogos de todos | Remover jogos de outros autores |
+| Administrador | Tudo o que está acima + gerir utilizadores e permissões |
 
-Cada autor pode depois mudar o nome e a palavra-passe em **Painel → A minha conta**.
+**Adicionar alguém:**
+1. Em **Administração → Utilizadores → Adicionar utilizador**, indica o email, o nome e as permissões.
+2. Cria a conta com esse email na [consola do Firebase → Authentication → Adicionar utilizador](https://console.firebase.google.com/project/plataforma-web-mj/authentication/users) e envia a palavra-passe à pessoa.
+3. Na primeira vez que entrar, a conta fica automaticamente com as permissões escolhidas.
+
+**Remover alguém:** botão **Remover** na mesma página (os jogos dessa pessoa continuam publicados).
 
 ---
 
 ## Publicar um jogo
 
-1. **Exporta o jogo para HTML5/Web** (ver tabela abaixo).
+**No browser (HTML5):**
+1. Exporta o jogo para HTML5/Web (ver tabela abaixo).
 2. No GitHub, abre a pasta [`jogos/`](jogos/) → **Add file → Upload files** → arrasta a pasta do jogo ou o `.zip` → **Commit changes**.
-   Se quiseres capa, põe um `capa.png` dentro do jogo (ou uma imagem na pasta [`capas/`](capas/)).
-3. Espera 1 a 3 minutos (podes acompanhar em **Actions**).
-4. No site, entra em **Painel → Publicar novo jogo**, escolhe o jogo na lista, preenche o título e a descrição e publica.
+3. Espera 1 a 2 minutos (podes acompanhar em **Actions**).
+4. No site: **Painel → Publicar jogo** → «No browser (repositório)» → escolhe o jogo, arrasta a capa e publica.
+
+**Para transferir (`.exe` e outros):**
+1. Abre os [Releases do GitHub](https://github.com/mello13256/Plataforma-online-MJ/releases/new), arrasta o `.exe` (até 2 GB, transferências sem limite) e publica.
+2. Copia a ligação do ficheiro (botão direito → «Copiar endereço da ligação»).
+3. No site: **Painel → Publicar jogo** → «Só transferência» (ou junta a transferência a um jogo de browser) → cola a ligação.
+
+Também podes usar ligações do Google Drive, itch.io, MEGA, etc.
 
 | Motor | Como exportar |
 | --- | --- |
@@ -62,7 +76,7 @@ Para jogos que não estão no repositório (ex.: no itch.io), escolhe **Ligaçã
 
 ### Limites do plano gratuito
 
-- Upload pelo site do GitHub: até **25 MB por ficheiro** (com o GitHub Desktop, até 100 MB).
+- Upload pelo site do GitHub para a pasta `jogos/`: até **25 MB por ficheiro** (com o GitHub Desktop, até 100 MB). Os Releases aceitam até 2 GB.
 - Firebase Hosting (Spark): **10 GB** de armazenamento e **360 MB por dia** de tráfego.
   Jogos pequenos (Godot, Phaser, GameMaker) aguentam muitas jogadas por dia; jogos Unity grandes gastam a quota depressa.
   Se for preciso, o plano Blaze cobra só o que passar da quota gratuita.
@@ -91,7 +105,8 @@ firebase.json        configuração do Hosting (endereços, cabeçalhos)
 
 ### Segurança
 
-- Só quem tem documento em `autores/` publica ou edita; cada autor só mexe nos seus jogos.
-- Os rascunhos só são visíveis para os autores; os visitantes só podem somar +1 ao contador de jogadas.
+- Cada ação é verificada pelas regras do Firestore conforme as permissões do utilizador; o dono nunca perde a administração.
+- Os rascunhos só são visíveis para os autores; os convidados só podem somar +1 ao contador de jogadas.
+- O registo público está desligado: ninguém cria conta sozinho.
 - As regras validam todos os campos (categorias, tamanhos, caminhos e ligações `http(s)`).
 - Os jogos do repositório correm no mesmo domínio do site. Como só quem tem acesso ao repositório os pode adicionar, isto é seguro — não dês acesso ao repositório a quem não confias.
