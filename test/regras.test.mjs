@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { after, before, beforeEach, describe, it } from 'node:test';
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import {
-  collection, deleteDoc, doc, getDoc, getDocs, increment, query, serverTimestamp, setDoc, setLogLevel, updateDoc,
+  Bytes, collection, deleteDoc, doc, getDoc, getDocs, increment, query, serverTimestamp, setDoc, setLogLevel, updateDoc,
   where,
 } from 'firebase/firestore';
 
@@ -163,5 +163,44 @@ describe('utilizadores e permissões', () => {
   it('uma conta nova não cria o próprio perfil', async () => {
     await assertFails(setDoc(doc(como('intruso', 'intruso@exemplo.pt'), 'autores/intruso'), perfil('Eu', 'eu', { publicar: true })));
     await assertFails(setDoc(doc(como('intruso'), 'jogos/x'), jogoBase({ autor_uid: 'intruso' })));
+  });
+});
+
+describe('pacotes (ficheiros carregados no site)', () => {
+  const pacote = (dono, extra = {}) => ({ dono, partes: 1, tamanho: 3, nome: 'jogo.zip', criado_em: serverTimestamp(), ...extra });
+  const parte = (n = 3) => ({ dados: Bytes.fromUint8Array(new Uint8Array(n)) });
+
+  it('quem pode publicar carrega pacotes e as partes', async () => {
+    const bd = como('joel');
+    await assertSucceeds(setDoc(doc(bd, 'pacotes/pacote-joel-1'), pacote('joel')));
+    await assertSucceeds(setDoc(doc(bd, 'pacotes/pacote-joel-1/partes/000'), parte()));
+    await assertSucceeds(getDoc(doc(visitante(), 'pacotes/pacote-joel-1/partes/000')));
+  });
+
+  it('não se carregam partes em pacotes alheios nem pacotes inválidos', async () => {
+    await assertSucceeds(setDoc(doc(como('joel'), 'pacotes/pacote-joel-2'), pacote('joel')));
+    await assertFails(setDoc(doc(como('antigo'), 'pacotes/pacote-joel-2/partes/001'), parte()));
+    await assertFails(setDoc(doc(como('bloqueado'), 'pacotes/pacote-bloq-1'), pacote('bloqueado')));
+    await assertFails(setDoc(doc(como('joel'), 'pacotes/pacote-joel-3'), pacote('antigo')));
+    await assertFails(setDoc(doc(como('joel'), 'pacotes/pacote-joel-4'), pacote('joel', { tamanho: 999999999 })));
+    await assertFails(setDoc(doc(visitante(), 'pacotes/pacote-anonimo'), pacote('ninguem')));
+  });
+
+  it('jogos podem usar um pacote e transferências carregadas no site', async () => {
+    const bd = como('joel');
+    await assertSucceeds(setDoc(doc(bd, 'jogos/carregado'), jogoBase({
+      tipo: 'pacote', caminho: null, pacote: { id: 'pacote-joel-1', entrada: 'build/index.html' },
+      transferencias: [{ rotulo: 'Windows (.exe)', url: '/transferir/pacote-joel-9/Jogo.exe' }],
+    })));
+    await assertFails(setDoc(doc(bd, 'jogos/mau'), jogoBase({ tipo: 'pacote', caminho: null, pacote: { id: 'x', entrada: 'index.html' } })));
+    await assertFails(setDoc(doc(bd, 'jogos/mau2'), jogoBase({ transferencias: [{ rotulo: 'x', url: '/outro/sitio' }] })));
+  });
+
+  it('só o dono ou quem gere jogos apaga pacotes', async () => {
+    await assertSucceeds(setDoc(doc(como('joel'), 'pacotes/pacote-joel-5'), pacote('joel')));
+    await assertSucceeds(setDoc(doc(como('joel'), 'pacotes/pacote-joel-5/partes/000'), parte()));
+    await assertFails(deleteDoc(doc(como('antigo'), 'pacotes/pacote-joel-5/partes/000')));
+    await assertSucceeds(deleteDoc(doc(como(DONO), 'pacotes/pacote-joel-5/partes/000')));
+    await assertSucceeds(deleteDoc(doc(como('joel'), 'pacotes/pacote-joel-5')));
   });
 });

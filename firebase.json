@@ -4,26 +4,104 @@
     "cleanUrls": true,
     "trailingSlash": false,
     "rewrites": [
-      { "source": "/jogo/**", "destination": "/jogo.html" },
-      { "source": "/autor/**", "destination": "/autor.html" }
+      {
+        "source": "/jogo/**",
+        "destination": "/jogo.html"
+      },
+      {
+        "source": "/autor/**",
+        "destination": "/autor.html"
+      },
+      {
+        "source": "/jogar/**",
+        "destination": "/carregar.html"
+      },
+      {
+        "source": "/transferir/**",
+        "destination": "/carregar.html"
+      }
     ],
     "headers": [
       {
         "source": "**",
         "headers": [
-          { "key": "X-Content-Type-Options", "value": "nosniff" },
-          { "key": "Referrer-Policy", "value": "same-origin" }
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "same-origin"
+          }
         ]
       },
       {
         "source": "**/*.@(html|js|css|json)",
-        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
       },
-      { "source": "/jogos/**/*.br", "headers": [{ "key": "Content-Encoding", "value": "br" }] },
-      { "source": "/jogos/**/*.gz", "headers": [{ "key": "Content-Encoding", "value": "gzip" }] },
-      { "source": "/jogos/**/*.wasm.@(br|gz)", "headers": [{ "key": "Content-Type", "value": "application/wasm" }] },
-      { "source": "/jogos/**/*.js.@(br|gz)", "headers": [{ "key": "Content-Type", "value": "application/javascript" }] },
-      { "source": "/jogos/**/*.data.@(br|gz)", "headers": [{ "key": "Content-Type", "value": "application/octet-stream" }] }
+      {
+        "source": "/jogos/**/*.br",
+        "headers": [
+          {
+            "key": "Content-Encoding",
+            "value": "br"
+          }
+        ]
+      },
+      {
+        "source": "/jogos/**/*.gz",
+        "headers": [
+          {
+            "key": "Content-Encoding",
+            "value": "gzip"
+          }
+        ]
+      },
+      {
+        "source": "/jogos/**/*.wasm.@(br|gz)",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/wasm"
+          }
+        ]
+      },
+      {
+        "source": "/jogos/**/*.js.@(br|gz)",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/javascript"
+          }
+        ]
+      },
+      {
+        "source": "/jogos/**/*.data.@(br|gz)",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/octet-stream"
+          }
+        ]
+      },
+      {
+        "source": "/sw.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          },
+          {
+            "key": "Service-Worker-Allowed",
+            "value": "/"
+          }
+        ]
+      }
     ]
   },
   "firestore": {
@@ -31,10 +109,18 @@
     "indexes": "firestore.indexes.json"
   },
   "emulators": {
-    "auth": { "port": 9099 },
-    "firestore": { "port": 8080 },
-    "hosting": { "port": 5000 },
-    "ui": { "enabled": false },
+    "auth": {
+      "port": 9099
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "hosting": {
+      "port": 5000
+    },
+    "ui": {
+      "enabled": false
+    },
     "singleProjectMode": true
   }
 }

@@ -1,5 +1,5 @@
 // Funções partilhadas por todas as páginas: topo, rodapé, tema, formatação, permissões e cartões.
-import { auth, bd, collection, doc, getDoc, getDocs, onAuthStateChanged, signOut } from './firebase.js';
+import { auth, bd, collection, deleteDoc, doc, getDoc, getDocs, onAuthStateChanged, signOut } from './firebase.js';
 
 export const NOME_SITE = 'Jogos MJ';
 export const REPOSITORIO = 'https://github.com/mello13256/Plataforma-online-MJ';
@@ -150,11 +150,12 @@ function caminhoParaUrl(caminho) {
 }
 
 export function jogavelNoBrowser(jogo) {
-  return jogo.tipo === 'repositorio' || jogo.tipo === 'ligacao';
+  return jogo.tipo === 'pacote' || jogo.tipo === 'repositorio' || jogo.tipo === 'ligacao';
 }
 
 export function urlJogo(jogo) {
   if (jogo.tipo === 'ligacao') return jogo.url_externo;
+  if (jogo.tipo === 'pacote') return `/jogar/${jogo.pacote.id}/${jogo.pacote.entrada.split('/').map(encodeURIComponent).join('/')}`;
   if (jogo.tipo === 'repositorio') return caminhoParaUrl(jogo.caminho);
   return null;
 }
@@ -193,6 +194,57 @@ export function cartaoJogo(jogo, autores) {
 export function grelha(jogos, autores, textoVazio) {
   if (!jogos.length) return vazio(textoVazio);
   return el('div', { class: 'grelha' }, jogos.map((j) => cartaoJogo(j, autores)));
+}
+
+export function formatarTamanho(bytes) {
+  if (bytes < 1024 * 1024) return `${formatarNumero(Math.max(1, Math.round(bytes / 1024)))} KB`;
+  return `${new Intl.NumberFormat('pt-PT', { maximumFractionDigits: 1 }).format(bytes / 1024 / 1024)} MB`;
+}
+
+// --------------------------------------------- Ficheiros carregados no site
+
+// Instala o service worker que serve /jogar/… e /transferir/… e espera que fique ativo.
+export async function prepararServiceWorker() {
+  if (!('serviceWorker' in navigator)) throw new Error('Este browser não suporta jogos carregados no site.');
+  await navigator.serviceWorker.register('/sw.js');
+  return navigator.serviceWorker.ready;
+}
+
+// IDs dos pacotes usados por um jogo (o jogo em si e as transferências carregadas).
+export function pacotesDoJogo(jogo) {
+  const ids = new Set();
+  if (jogo?.tipo === 'pacote' && jogo.pacote?.id) ids.add(jogo.pacote.id);
+  for (const t of jogo?.transferencias || []) {
+    const partes = t.url.match(/^\/transferir\/([A-Za-z0-9_-]+)\//);
+    if (partes) ids.add(partes[1]);
+  }
+  return [...ids];
+}
+
+export async function apagarPacote(id) {
+  const partes = await getDocs(collection(bd, 'pacotes', id, 'partes'));
+  await Promise.all(partes.docs.map((d) => deleteDoc(d.ref)));
+  await deleteDoc(doc(bd, 'pacotes', id));
+}
+
+// Junta as partes de um ficheiro carregado no site e entrega-o ao browser como transferência.
+export async function transferirFicheiro(url, aoProgresso = () => {}) {
+  const [, id, nome] = url.match(/^\/transferir\/([A-Za-z0-9_-]+)\/([^/]+)$/);
+  const partes = (await getDocs(collection(bd, 'pacotes', id, 'partes'))).docs.sort((a, b) => a.id.localeCompare(b.id));
+  if (!partes.length) throw new Error('Este ficheiro já não está disponível.');
+  aoProgresso();
+  const blob = new Blob(partes.map((p) => p.data().dados.toUint8Array()), { type: 'application/octet-stream' });
+  const ligacao = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: decodeURIComponent(nome) });
+  document.body.append(ligacao);
+  ligacao.click();
+  ligacao.remove();
+  setTimeout(() => URL.revokeObjectURL(ligacao.href), 60_000);
+}
+
+// Elimina um jogo e os ficheiros que foram carregados para ele.
+export async function eliminarJogo(jogo) {
+  await deleteDoc(doc(bd, 'jogos', jogo.id));
+  await Promise.all(pacotesDoJogo(jogo).map((id) => apagarPacote(id).catch(() => {})));
 }
 
 export async function carregarAutores() {

@@ -1,7 +1,8 @@
 import { bd, collection, doc, getDoc, getDocs, increment, query, updateDoc, where } from './firebase.js';
 import {
   capa, carregarAutores, cartaoJogo, definirTitulo, el, formatarData, formatarNumero, icone, iniciais,
-  jogavelNoBrowser, mensagem, obterPerfil, ordenarPorData, paginaErro, paragrafos, pode, preencher, selos,
+  jogavelNoBrowser, mensagem, obterPerfil, ordenarPorData, paginaErro, paragrafos, pode, prepararServiceWorker,
+  preencher, selos, transferirFicheiro,
   traduzirErro, urlJogo, utilizadorAtual,
 } from './comum.js';
 
@@ -24,7 +25,16 @@ function leitor(jogo, ref) {
     return { caixa, barra: null, jogar: null };
   }
   const externo = jogo.tipo === 'ligacao';
-  const jogar = () => {
+  const jogar = async () => {
+    if (caixa.querySelector('iframe')) return;
+    if (jogo.tipo === 'pacote') {
+      try {
+        await prepararServiceWorker();
+      } catch (erro) {
+        preencher(caixa, el('div', { class: 'leitor-capa' }, el('p', { class: 'leitor-centro' }, erro.message)));
+        return;
+      }
+    }
     if (caixa.querySelector('iframe')) return;
     const iframe = el('iframe', {
       src: urlJogo(jogo),
@@ -51,8 +61,8 @@ function leitor(jogo, ref) {
       type: 'button',
       class: 'botao secundario pequeno',
       onclick: () => {
-        jogar();
         caixa.requestFullscreen?.();
+        jogar();
       },
     }, icone('ecra'), 'Ecrã inteiro'),
     el('a', { class: 'botao secundario pequeno', href: urlJogo(jogo), target: '_blank', rel: 'noopener' }, icone('externo'), 'Abrir numa nova janela'),
@@ -86,9 +96,13 @@ try {
       const maisDoAutor = ordenarPorData(outros.docs.map((d) => ({ id: d.id, ...d.data() })).filter((j) => j.id !== jogo.id)).slice(0, 4);
       const { caixa, barra, jogar } = leitor(jogo, ref);
       const transferencias = jogo.transferencias || [];
+      if (jogo.tipo === 'pacote') prepararServiceWorker().catch(() => {});
 
       definirTitulo(jogo.titulo);
       preencher(conteudo,
+        new URLSearchParams(location.search).has('novo')
+          ? mensagem('sucesso', jogo.publicado ? 'Jogo publicado! Já está visível para toda a gente.' : 'Rascunho guardado. Só os autores o conseguem ver.')
+          : null,
         jogo.publicado ? null : mensagem('aviso', 'Este jogo é um rascunho: só os autores o conseguem ver.'),
         el('div', { class: 'pagina-jogo' },
           el('div', { class: 'bloco-texto' },
@@ -106,9 +120,22 @@ try {
               transferencias.map((t) => el('a', {
                 class: `botao ${jogar ? 'secundario' : 'verde grande'}`,
                 href: t.url,
-                target: '_blank',
-                rel: 'noopener',
-                onclick: () => contarJogada(jogo, ref),
+                target: t.url.startsWith('/') ? null : '_blank',
+                rel: t.url.startsWith('/') ? null : 'noopener',
+                onclick: async (evento) => {
+                  contarJogada(jogo, ref);
+                  if (!t.url.startsWith('/transferir/')) return;
+                  evento.preventDefault();
+                  const botao = evento.currentTarget;
+                  const texto = botao.lastChild.textContent;
+                  botao.lastChild.textContent = 'A preparar a transferência…';
+                  try {
+                    await transferirFicheiro(t.url);
+                  } catch (erro) {
+                    alert(traduzirErro(erro));
+                  }
+                  botao.lastChild.textContent = texto;
+                },
               }, icone('transferir'), `Transferir · ${t.rotulo}`)),
               transferencias.length ? el('p', { class: 'ajuda' }, 'A transferência abre noutra página. Ficheiros .exe podem mostrar um aviso do Windows; confirma que vem de um autor em quem confias.') : null,
               podeEditar ? el('a', { class: 'botao secundario', href: `/editar?id=${jogo.id}` }, icone('editar'), 'Editar jogo') : null,

@@ -162,7 +162,8 @@ textarea { resize: vertical; }
 .formulario > label { display: grid; gap: .4rem; }
 .opcional { color: var(--texto-suave); font-weight: 500; font-size: .85rem; }
 .ajuda { color: var(--texto-suave); font-size: .88rem; }
-.opcao { display: flex; gap: .6rem; align-items: center; cursor: pointer; }
+.opcao, .formulario > label.opcao { display: flex; gap: .6rem; align-items: flex-start; cursor: pointer; }
+.opcao input { margin-top: .2rem; }
 
 .cartao-form { background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio); padding: clamp(1.25rem, 3vw, 2rem); box-shadow: var(--sombra); }
 .seccao-form { display: grid; gap: 1rem; padding-top: 1.25rem; border-top: 1px solid var(--borda); }
@@ -183,13 +184,15 @@ textarea { resize: vertical; }
 
 .zona-capa {
   position: relative; display: grid; place-items: center; text-align: center; gap: .4rem;
-  aspect-ratio: 16 / 9; border: 2px dashed var(--borda); border-radius: var(--raio); cursor: pointer;
+  min-height: 150px; padding: 1rem; border: 2px dashed var(--borda); border-radius: var(--raio); cursor: pointer;
   background: var(--superficie-2); color: var(--texto-suave); overflow: hidden; transition: border-color .12s, background .12s;
 }
 .zona-capa:hover, .zona-capa.a-arrastar { border-color: var(--destaque); background: var(--destaque-suave); color: var(--texto); }
 .zona-capa > .icone { width: 2.2rem; height: 2.2rem; color: var(--destaque); }
+.zona-capa:has(img) { aspect-ratio: 16 / 9; padding: 0; }
 .zona-capa img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.zona-capa .remover-capa { position: absolute; top: .6rem; right: .6rem; z-index: 2; }
+.zona-capa .capa-acoes { position: absolute; top: .6rem; right: .6rem; left: .6rem; z-index: 2; display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
+.zona-capa .capa-acoes > :last-child { margin-left: auto; }
 
 .lista-transferencias { display: grid; gap: .6rem; }
 .linha-transferencia { display: grid; grid-template-columns: minmax(120px, 1fr) 2fr auto; gap: .5rem; align-items: center; }
@@ -276,7 +279,7 @@ a.etiqueta:hover { color: var(--texto); border-color: var(--destaque); text-deco
   position: relative; width: 100%; aspect-ratio: 16 / 9; background: #0b0c18; border-radius: 20px; overflow: hidden;
   box-shadow: var(--sombra-forte);
 }
-.leitor iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; }
+.leitor iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
 .leitor:fullscreen { border-radius: 0; }
 .leitor-capa { position: absolute; inset: 0; display: grid; place-items: center; }
 .leitor-fundo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
@@ -356,4 +359,69 @@ img.leitor-fundo { filter: brightness(.55) saturate(1.1); }
   .chip-utilizador { padding-right: .3rem; }
   .linha-transferencia { grid-template-columns: 1fr; }
   main.contentor { padding-top: 1.25rem; gap: 2rem; }
+}
+
+/* -------------------------------------------------------- Publicar jogo */
+.publicar { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 1.5rem; align-items: start; }
+.publicar-lateral { position: sticky; top: 88px; display: grid; gap: 1rem; }
+.passo > h2 { display: flex; align-items: center; gap: .65rem; font-size: 1.2rem; }
+.numero-passo {
+  display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; flex: none;
+  background: var(--destaque); color: #fff; font-size: .95rem;
+}
+.segmentado { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 4px; border-radius: 14px; background: var(--superficie-2); }
+.segmentado button {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem; padding: .7rem 1rem; border: 0; border-radius: 10px;
+  background: none; font: inherit; font-weight: 700; color: var(--texto-suave); cursor: pointer;
+}
+.segmentado button[aria-selected="true"] { background: var(--superficie); color: var(--texto); box-shadow: var(--sombra); }
+.segmentado.pequeno button { padding: .45rem .7rem; font-size: .88rem; }
+.zona-jogo {
+  display: grid; justify-items: center; text-align: center; gap: .5rem; padding: 2.5rem 1.25rem;
+  border: 2px dashed color-mix(in srgb, var(--destaque) 45%, var(--borda)); border-radius: var(--raio);
+  background: linear-gradient(135deg, var(--destaque-suave), var(--superficie)); cursor: pointer;
+  transition: border-color .12s, transform .12s, background .12s;
+}
+.zona-jogo:hover, .zona-jogo.a-arrastar { border-color: var(--destaque); }
+.zona-jogo.a-arrastar { transform: scale(1.01); background: var(--destaque-suave); }
+.zona-jogo .acoes { margin-top: .5rem; }
+.zona-jogo.com-ficheiro { padding: 1rem 1.25rem; cursor: default; border-style: solid; text-align: left; justify-items: stretch; }
+.titulo-zona { font-size: 1.25rem; }
+.icone-grande {
+  display: grid; place-items: center; width: 56px; height: 56px; border-radius: 16px; flex: none;
+  background: var(--superficie); color: var(--destaque); box-shadow: var(--sombra);
+}
+.icone-grande .icone { width: 28px; height: 28px; }
+.ficheiro-escolhido { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.ficheiro-escolhido > div:nth-child(2) { flex: 1; min-width: 180px; display: grid; }
+.ficheiro-escolhido small { color: var(--texto-suave); word-break: break-word; }
+.zona-pequena {
+  display: flex; align-items: center; gap: .75rem; padding: .9rem 1rem; border: 2px dashed var(--borda); border-radius: 12px;
+  color: var(--texto-suave); cursor: pointer; transition: border-color .12s, background .12s;
+}
+.zona-pequena:hover, .zona-pequena.a-arrastar { border-color: var(--destaque); background: var(--destaque-suave); color: var(--texto); }
+.zona-pequena .icone { color: var(--destaque); width: 1.4rem; height: 1.4rem; }
+.ficheiro-anexo {
+  display: flex; align-items: center; gap: .5rem; padding: .6rem .85rem; border-radius: var(--raio-pequeno);
+  background: var(--superficie-2); font-weight: 600; font-size: .9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.progresso { position: relative; height: 38px; border-radius: 12px; background: var(--superficie-2); overflow: hidden; }
+.progresso-barra { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, var(--destaque), #ff5fa2); transition: width .25s; }
+.progresso-texto { position: relative; display: grid; place-items: center; height: 100%; font-weight: 700; font-size: .9rem; color: var(--texto); mix-blend-mode: normal; }
+.lista-verificacao { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+.lista-verificacao li { display: flex; gap: .5rem; align-items: center; color: var(--texto-suave); }
+.lista-verificacao li .icone { color: var(--borda); }
+.lista-verificacao li.feito { color: var(--texto); }
+.lista-verificacao li.feito .icone { color: var(--verde); }
+.janela-teste {
+  width: min(1100px, 96vw); padding: 0; border: 0; border-radius: 20px; background: var(--superficie); color: var(--texto);
+  box-shadow: var(--sombra-forte); overflow: hidden;
+}
+.janela-teste::backdrop { background: rgba(10, 12, 28, .7); backdrop-filter: blur(4px); }
+.janela-topo { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .8rem 1rem; flex-wrap: wrap; }
+.janela-teste .leitor { border-radius: 0; box-shadow: none; }
+@media (max-width: 900px) {
+  .publicar { grid-template-columns: minmax(0, 1fr); }
+  .publicar-lateral { position: static; order: -1; }
+  .publicar-lateral .caixa:last-child { display: none; }
 }

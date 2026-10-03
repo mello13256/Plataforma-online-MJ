@@ -1,6 +1,6 @@
 import { bd, collection, criarConta, deleteDoc, doc, getDocs, setDoc, updateDoc } from './firebase.js';
 import {
-  PERMISSOES, UID_DONO, capa, carregarAutores, criarSlug, definirTitulo, el, exigirPerfil, formatarNumero, icone,
+  PERMISSOES, UID_DONO, capa, carregarAutores, criarSlug, definirTitulo, el, eliminarJogo, exigirPerfil, formatarNumero, icone,
   iniciais, mensagem, paginaErro, pode, preencher, traduzirErro, vazio,
 } from './comum.js';
 
@@ -49,7 +49,7 @@ function separadorJogos({ perfil, jogos, autores, aviso }) {
   const eliminar = async (jogo, linha) => {
     if (!confirm(`Eliminar «${jogo.titulo}» de ${autores.get(jogo.autor_uid)?.nome || 'outro autor'}? Esta ação não pode ser desfeita.`)) return;
     try {
-      await deleteDoc(doc(bd, 'jogos', jogo.id));
+      await eliminarJogo(jogo);
       linha.remove();
       preencher(aviso, mensagem('sucesso', `«${jogo.titulo}» foi eliminado.`));
     } catch (erro) {

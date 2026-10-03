@@ -87,7 +87,8 @@ service cloud.firestore {
     function transferenciaValida(t) {
       return t is map && t.keys().hasOnly(['rotulo', 'url'])
         && textoEntre(t.rotulo, 1, 60)
-        && textoAte(t.url, 1000) && t.url.matches('^https?://.+');
+        && textoAte(t.url, 1000)
+        && (t.url.matches('^https?://.+') || t.url.matches('^/transferir/[A-Za-z0-9_-]{8,40}/[^/?#]{1,120}$'));
     }
 
     function transferenciasValidas(lista) {
@@ -105,7 +106,7 @@ service cloud.firestore {
 
     function jogoValido(j) {
       return j.keys().hasOnly(['titulo', 'descricao', 'instrucoes', 'categoria', 'tipo', 'caminho',
-                               'url_externo', 'capa', 'capa_imagem', 'transferencias', 'publicado',
+                               'url_externo', 'pacote', 'capa', 'capa_imagem', 'transferencias', 'publicado',
                                'jogadas', 'autor_uid', 'criado_em', 'atualizado_em'])
         && textoEntre(j.titulo, 1, 80)
         && textoAte(j.descricao, 5000)
@@ -118,13 +119,53 @@ service cloud.firestore {
               && j.capa_imagem.matches('^data:image/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$')))
         && transferenciasValidas(j.get('transferencias', []))
         && (
-          (j.tipo == 'repositorio' && j.url_externo == null
+          (j.tipo == 'pacote' && j.caminho == null && j.url_externo == null
+            && j.pacote is map && j.pacote.keys().hasOnly(['id', 'entrada'])
+            && j.pacote.id is string && j.pacote.id.matches('^[A-Za-z0-9_-]{8,40}$')
+            && textoEntre(j.pacote.entrada, 1, 300) && !j.pacote.entrada.matches('.*\\.\\..*'))
+          || (j.tipo == 'repositorio' && j.url_externo == null
             && caminhoSeguro(j.caminho, '^jogos/[a-z0-9-]+/[^?#:\\\\]+$'))
           || (j.tipo == 'ligacao' && j.caminho == null && textoAte(j.url_externo, 1000)
             && j.url_externo.matches('^https?://.+'))
           || (j.tipo == 'nenhum' && j.caminho == null && j.url_externo == null
             && j.get('transferencias', []).size() > 0)
         );
+    }
+
+    // ---------------------------------------------------------------- pacotes
+    // Ficheiros carregados no site (jogos .zip e transferências), partidos em blocos
+    // de até 1 MB em /pacotes/{id}/partes/{000..}. Qualquer pessoa os pode ler.
+    function caminhoPacote(id) {
+      return /databases/$(database)/documents/pacotes/$(id);
+    }
+
+    function podeApagarPacote(id) {
+      return request.auth != null
+        && (get(caminhoPacote(id)).data.dono == request.auth.uid || pode('editar_todos') || pode('eliminar_todos'));
+    }
+
+    match /pacotes/{id} {
+      allow read: if true;
+      allow create: if pode('publicar')
+        && id.matches('^[A-Za-z0-9_-]{8,40}$')
+        && request.resource.data.keys().hasOnly(['dono', 'partes', 'tamanho', 'nome', 'criado_em'])
+        && request.resource.data.dono == request.auth.uid
+        && request.resource.data.partes is int && request.resource.data.partes >= 1 && request.resource.data.partes <= 60
+        && request.resource.data.tamanho is int && request.resource.data.tamanho <= 52428800
+        && textoEntre(request.resource.data.nome, 1, 120)
+        && request.resource.data.criado_em == request.time;
+      allow delete: if podeApagarPacote(id);
+
+      match /partes/{parte} {
+        allow read: if true;
+        allow create: if request.auth != null
+          && parte.matches('^[0-9]{3}$')
+          && get(caminhoPacote(id)).data.dono == request.auth.uid
+          && request.resource.data.keys().hasOnly(['dados'])
+          && request.resource.data.dados is bytes
+          && request.resource.data.dados.size() <= 1000000;
+        allow delete: if podeApagarPacote(id);
+      }
     }
 
     match /jogos/{slug} {

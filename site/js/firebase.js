@@ -16,6 +16,7 @@ export {
   updatePassword,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 export {
+  Bytes,
   collection,
   deleteDoc,
   doc,

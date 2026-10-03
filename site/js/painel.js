@@ -1,6 +1,6 @@
-import { bd, collection, deleteDoc, doc, getDocs, query, where } from './firebase.js';
+import { bd, collection, getDocs, query, where } from './firebase.js';
 import {
-  capa, definirTitulo, el, exigirPerfil, formatarData, formatarNumero, icone, mensagem, pode, preencher,
+  capa, definirTitulo, el, eliminarJogo, exigirPerfil, formatarData, formatarNumero, icone, mensagem, pode, preencher,
   traduzirErro, vazio,
 } from './comum.js';
 
@@ -27,7 +27,7 @@ try {
     const eliminar = async (jogo, linha) => {
       if (!confirm(`Tens a certeza de que queres eliminar «${jogo.titulo}»? Esta ação não pode ser desfeita.`)) return;
       try {
-        await deleteDoc(doc(bd, 'jogos', jogo.id));
+        await eliminarJogo(jogo);
         linha.remove();
         preencher(aviso, mensagem('sucesso', 'Jogo eliminado.'));
       } catch (erro) {

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A preparar… · Jogos MJ</title>
+  <style>
+    body { margin: 0; height: 100vh; display: grid; place-items: center; font-family: system-ui, sans-serif; background: #0e1020; color: #eceefe; text-align: center; }
+    p { max-width: 36ch; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <p id="estado">A preparar…</p>
+  <script>
+    // Instala o service worker que serve os jogos e as transferências e volta a abrir o endereço.
+    (async () => {
+      const estado = document.getElementById('estado');
+      if (!('serviceWorker' in navigator)) {
+        estado.textContent = 'Este browser não suporta esta funcionalidade. Experimenta o Chrome, o Edge ou o Firefox atualizados.';
+        return;
+      }
+      if (sessionStorage.getItem('sw-recarregado') === location.pathname) {
+        sessionStorage.removeItem('sw-recarregado');
+        estado.textContent = 'Não foi possível abrir este ficheiro. Volta à página do jogo e tenta novamente.';
+        return;
+      }
+      await navigator.serviceWorker.register('/sw.js');
+      await navigator.serviceWorker.ready;
+      sessionStorage.setItem('sw-recarregado', location.pathname);
+      location.reload();
+    })().catch(() => {
+      document.getElementById('estado').textContent = 'Não foi possível preparar o ficheiro. Recarrega a página.';
+    });
+  </script>
+</body>
+</html>

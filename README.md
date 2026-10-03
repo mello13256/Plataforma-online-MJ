@@ -50,18 +50,22 @@ pronta a copiar e enviar à pessoa, que depois muda a palavra-passe em **A minha
 
 ## Publicar um jogo
 
-**No browser (HTML5):**
-1. Exporta o jogo para HTML5/Web (ver tabela abaixo).
-2. No GitHub, abre a pasta [`jogos/`](jogos/) → **Add file → Upload files** → arrasta a pasta do jogo ou o `.zip` → **Commit changes**.
-3. Espera 1 a 2 minutos (podes acompanhar em **Actions**).
-4. No site: **Painel → Publicar jogo** → «No browser (repositório)» → escolhe o jogo, arrasta a capa e publica.
+Tudo é feito no site, em **Painel → Publicar jogo**:
 
-**Para transferir (`.exe` e outros):**
-1. Abre os [Releases do GitHub](https://github.com/mello13256/Plataforma-online-MJ/releases/new), arrasta o `.exe` (até 2 GB, transferências sem limite) e publica.
-2. Copia a ligação do ficheiro (botão direito → «Copiar endereço da ligação»).
-3. No site: **Painel → Publicar jogo** → «Só transferência» (ou junta a transferência a um jogo de browser) → cola a ligação.
+1. **Arrasta o jogo** para a zona «O jogo»: a pasta exportada para Web, um `.zip` ou um `.html` (até 50 MB).
+   O título é preenchido a partir do nome e, se o jogo tiver uma imagem `capa.png`/`cover.png` (ou o `index.png` do Godot), passa a ser a capa.
+2. Carrega em **Testar** para jogar antes de publicar.
+3. Para jogos que se instalam, arrasta o `.exe`, `.apk`, `.zip`… para **Transferências** (até 50 MB cada),
+   ou escolhe **Só para transferir**. Ficheiros maiores: usa os [Releases do GitHub](https://github.com/mello13256/Plataforma-online-MJ/releases/new) e adiciona a ligação.
+4. Escolhe a categoria (ou escreve outra), arrasta uma capa se quiseres e carrega em **Publicar jogo**.
 
-Também podes usar ligações do Google Drive, itch.io, MEGA, etc.
+Os ficheiros carregados ficam guardados no Firestore em blocos de ~900 KB e são servidos por um *service worker* (`site/sw.js`),
+que os guarda em cache no browser de quem joga.
+
+Alternativas (separador ao lado de «Carregar ficheiros»):
+- **Ligação externa** — jogo alojado noutro site (ex.: endereço de incorporação do itch.io).
+- **Pasta do GitHub** — para jogos com mais de 50 MB: coloca a pasta (ou `.zip`) em [`jogos/`](jogos/) no GitHub;
+  1 a 2 minutos depois aparece na lista.
 
 | Motor | Como exportar |
 | --- | --- |
@@ -75,7 +79,9 @@ Para jogos que não estão no repositório (ex.: no itch.io), escolhe **Ligaçã
 
 ### Limites do plano gratuito
 
-- Upload pelo site do GitHub para a pasta `jogos/`: até **25 MB por ficheiro** (com o GitHub Desktop, até 100 MB). Os Releases aceitam até 2 GB.
+- Jogos e transferências carregados no site: até **50 MB por ficheiro**. Firestore gratuito: **1 GB** de espaço e **10 GB/mês** de tráfego
+  (cada pessoa transfere o jogo uma vez; depois fica em cache no browser).
+- Pasta `jogos/` pelo site do GitHub: até **25 MB por ficheiro** (com o GitHub Desktop, até 100 MB). Os Releases aceitam até 2 GB.
 - Firebase Hosting (Spark): **10 GB** de armazenamento e **360 MB por dia** de tráfego.
   Jogos pequenos (Godot, Phaser, GameMaker) aguentam muitas jogadas por dia; jogos Unity grandes gastam a quota depressa.
   Se for preciso, o plano Blaze cobra só o que passar da quota gratuita.
