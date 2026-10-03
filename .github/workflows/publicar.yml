@@ -6,6 +6,13 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  id-token: write # para o GitHub se identificar no Google Cloud sem chaves
+
+env:
+  PROJETO: plataforma-web-mj
+
 concurrency:
   group: publicar-firebase
   cancel-in-progress: false
@@ -36,22 +43,13 @@ jobs:
       - name: Preparar o site
         run: npm run preparar
 
-      - name: Verificar configuração
-        env:
-          CONTA_SERVICO: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          PROJETO: ${{ vars.FIREBASE_PROJECT_ID }}
-        run: |
-          if [ -z "$CONTA_SERVICO" ] || [ -z "$PROJETO" ]; then
-            echo "::error::Falta configurar o segredo FIREBASE_SERVICE_ACCOUNT e/ou a variável FIREBASE_PROJECT_ID (ver README, secção «Ligar ao Firebase»)."
-            exit 1
-          fi
+      - name: Autenticar no Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/732929806250/locations/global/workloadIdentityPools/github/providers/github
+          service_account: github-publicar@plataforma-web-mj.iam.gserviceaccount.com
 
       - name: Publicar
-        env:
-          CONTA_SERVICO: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          PROJETO: ${{ vars.FIREBASE_PROJECT_ID }}
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/conta-servico.json
         run: |
-          printf '%s' "$CONTA_SERVICO" > "$GOOGLE_APPLICATION_CREDENTIALS"
           npx firebase deploy --only hosting,firestore:rules --project "$PROJETO" --non-interactive
           echo "### Site publicado em https://$PROJETO.web.app 🎮" >> "$GITHUB_STEP_SUMMARY"

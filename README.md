@@ -21,63 +21,24 @@ Funciona 100% no plano gratuito do Firebase (Spark):
 
 ---
 
-## Ligar ao Firebase (fazer uma vez)
+## Onde está o site
 
-### 1. Criar o projeto
+- **Site:** <https://plataforma-web-mj.web.app>
+- **Projeto Firebase:** `plataforma-web-mj` (plano gratuito Spark) — <https://console.firebase.google.com/project/plataforma-web-mj>
+- **Publicação:** cada alteração no ramo principal do GitHub republica o site (separador **Actions**).
+  O GitHub identifica-se no Google sem chaves (Workload Identity Federation): só este repositório tem autorização.
 
-1. Abre <https://console.firebase.google.com> e carrega em **Criar projeto**.
-2. Dá-lhe um nome (ex.: `jogos-mj`). O Google Analytics não é preciso.
-3. Aponta o **ID do projeto** (aparece por baixo do nome, ex.: `jogos-mj-1a2b3`).
+### Adicionar um autor
 
-### 2. Registar a app Web
+O registo público está desligado: as contas são criadas na consola.
 
-Na página inicial do projeto, carrega no ícone **`</>`** (Web), dá um nome (ex.: `site`) e conclui.
-Não é preciso copiar nada: o site lê a configuração sozinho.
-
-### 3. Ativar o início de sessão
-
-1. **Authentication → Começar → Email/palavra-passe → Ativar → Guardar.**
-2. Separador **Utilizadores → Adicionar utilizador**: cria uma conta para ti e outra para o teu amigo.
-3. Copia o **UID** de cada utilizador (coluna «UID do utilizador»).
-4. (Opcional) **Modelos → idioma** → Português (Portugal), para os emails de recuperação de palavra-passe.
-
-### 4. Criar a base de dados
-
-1. **Firestore Database → Criar base de dados** → localização na Europa (ex.: `eur3`) → **modo de produção**.
-2. **Iniciar coleção** com o ID `autores`.
-3. Para cada um de vocês, cria um documento:
-   - **ID do documento**: o UID copiado no passo 3;
+1. **Authentication → Utilizadores → Adicionar utilizador** (email e palavra-passe) e copia o **UID**.
+2. **Firestore Database → coleção `autores` → Adicionar documento**:
+   - **ID do documento**: o UID;
    - campo `nome` (string): o nome que aparece no site, ex.: `Mello`;
-   - campo `utilizador` (string): nome curto sem espaços, usado no endereço `/autor/...`, ex.: `mello`.
+   - campo `utilizador` (string): nome curto sem espaços, usado em `/autor/...`, ex.: `mello`.
 
-> As regras de segurança são publicadas automaticamente pelo GitHub (ficheiro `firestore.rules`).
-
-### 5. Ativar o Hosting
-
-**Hosting → Começar** e avança até ao fim (não precisas de correr nenhum comando).
-
-### 6. Criar a chave para o GitHub publicar
-
-1. Abre <https://console.cloud.google.com/iam-admin/serviceaccounts> e escolhe o teu projeto.
-2. **Criar conta de serviço** → nome `github-publicar` → **Criar e continuar**.
-3. Adiciona as funções **Administrador do Firebase** e **Consumidor do Service Usage** → **Concluído**.
-4. Abre a conta criada → **Chaves → Adicionar chave → Criar nova chave → JSON**. É transferido um ficheiro `.json`.
-
-> Este ficheiro dá acesso ao teu projeto: não o partilhes nem o coloques no repositório.
-
-### 7. Configurar o GitHub
-
-No repositório: **Settings → Secrets and variables → Actions**.
-
-1. Separador **Secrets → New repository secret**:
-   nome `FIREBASE_SERVICE_ACCOUNT`, valor = todo o conteúdo do ficheiro `.json`.
-2. Separador **Variables → New repository variable**:
-   nome `FIREBASE_PROJECT_ID`, valor = o ID do projeto (passo 1).
-
-### 8. Publicar
-
-Vai a **Actions → Publicar no Firebase → Run workflow**. Daqui para a frente, cada alteração no ramo principal
-republica o site sozinha. O site fica em **`https://<ID-do-projeto>.web.app`**.
+Cada autor pode depois mudar o nome e a palavra-passe em **Painel → A minha conta**.
 
 ---
 
