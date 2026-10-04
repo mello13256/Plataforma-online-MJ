@@ -8,6 +8,7 @@ import { Efeitos } from './efeitos.js';
 import { Audio } from './audio.js';
 import { Entrada } from './entrada.js';
 import { Hud } from './hud.js';
+import { PrimeiraPessoa } from './primeira-pessoa.js';
 import {
   FOGUEIRAS, INIMIGOS, ITENS, MENSAGENS, ARMAS, NOMES_ATRIBUTOS, custoNivel, FORTALEZA, ARENA_LOBO, MUNDO, REGIOES,
 } from './dados.js';
@@ -34,7 +35,8 @@ function escrever(chave, v) {
 
 // ------------------------------------------------------------------ opções e renderizador
 const toque = matchMedia('(pointer: coarse)').matches;
-const opcoes = Object.assign({ qualidade: toque ? 'baixa' : 'media', sens: 1, volume: 0.8, inverter: false, fps: false }, ler(CHAVE_OP) || {});
+const opcoes = Object.assign({ qualidade: toque ? 'baixa' : 'media', sens: 1, volume: 0.8, inverter: false, fps: false, camara: 'primeira' }, ler(CHAVE_OP) || {});
+const emPrimeiraPessoa = () => opcoes.camara === 'primeira';
 const Q = opcoes.qualidade;
 
 const canvas = $('ecra');
@@ -57,11 +59,18 @@ const camara = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, 0.1, 60
 // Pós-processamento (bloom e correção de cor) só na qualidade alta; nas outras a vinheta é feita em CSS.
 let composer = null;
 let passoCor = null;
+let passoBracos = null;
 if (Q === 'alta') {
   const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: 2 });
   composer = new THREE.EffectComposer(renderer, rt);
   composer.setPixelRatio(renderer.getPixelRatio());
   composer.addPass(new THREE.RenderPass(cena, camara));
+  // os braços da primeira pessoa são desenhados por cima do mundo, antes do bloom (ver arrancar)
+  passoBracos = new THREE.RenderPass(new THREE.Scene(), camara);
+  passoBracos.clear = false;
+  passoBracos.clearDepth = true;
+  passoBracos.enabled = false;
+  composer.addPass(passoBracos);
   const bloom = new THREE.UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.28, 0.5, 1.6);
   composer.addPass(bloom);
   passoCor = new THREE.ShaderPass({
@@ -97,6 +106,7 @@ function aplicarResolucao() {
 addEventListener('resize', () => {
   camara.aspect = innerWidth / innerHeight;
   camara.updateProjectionMatrix();
+  if (pp) pp.redimensionar();
   aplicarResolucao();
 });
 
@@ -127,9 +137,11 @@ const entrada = new Entrada(canvas);
 entrada.sensibilidade = opcoes.sens;
 entrada.inverterY = opcoes.inverter;
 const hud = new Hud();
+const pontoMira = $('ponto');
 
 let tex;
 let mundo;
+let pp = null; // braços e armas da primeira pessoa
 let efeitos;
 let M;
 let jogador;
@@ -160,7 +172,11 @@ const progresso = {
   fogueiras: [], ultimaFogueira: null, itens: [], chefes: [], mancha: null, tempo: 0, visitou: [],
 };
 
-const cam = { yaw: Math.PI, pitch: 0.28, dist: 4.6, distAtual: 4.6, foco: new THREE.Vector3(), pos: new THREE.Vector3() };
+const cam = {
+  yaw: Math.PI, pitch: 0.28, dist: 4.6, distAtual: 4.6, foco: new THREE.Vector3(), pos: new THREE.Vector3(),
+  // primeira pessoa: altura dos olhos e desvios suavizados (rolar, cair, sentar…)
+  olhos: 1.62, baixar: 0, inclinar: 0, rolo: 0, fov: 72,
+};
 
 // contexto partilhado com o jogador e os inimigos
 const ctx = {
@@ -168,6 +184,7 @@ const ctx = {
   get mundo() { return mundo; },
   get efeitos() { return efeitos; },
   get jogador() { return jogador; },
+  get primeiraPessoa() { return emPrimeiraPessoa(); },
   tremer(i) { trauma = Math.min(1, trauma + i); },
   pararTempo(s) { paragem = Math.max(paragem, s); },
   aoMorrerJogador,
@@ -226,6 +243,14 @@ async function arrancar() {
     }
   }
   jogador = new Jogador(ctx, M);
+  carregar(0.8, 'A forjar as manoplas…');
+  await quadro();
+  pp = new PrimeiraPessoa(mundo, Q);
+  pp.definirArma(jogador.arma);
+  if (passoBracos) {
+    passoBracos.scene = pp.cena;
+    passoBracos.camera = pp.cam;
+  }
   for (const d of INIMIGOS) inimigos.push(new Inimigo(ctx, d, M));
   criarItens();
   criarMensagens();
@@ -237,6 +262,7 @@ async function arrancar() {
   posicionarCamaraTitulo(0);
   mundo.atualizar(0.016, jogador.pos, camara);
   renderer.compile(cena, camara);
+  renderer.compile(pp.cena, pp.cam);
   carregar(1, 'Pronto.');
   await quadro();
   mostrarTitulo();
@@ -404,7 +430,7 @@ function comecar(novo) {
     jogador.anim.tocar('levantar', 1.6);
   }
   cam.yaw = jogador.rot;
-  cam.pitch = 0.25;
+  cam.pitch = emPrimeiraPessoa() ? 0.05 : 0.25;
   chefeAtivo = null;
   regiaoAtual = null;
   $('titulo').style.opacity = 0;
@@ -435,6 +461,10 @@ function acenderFogueira(f) {
   jogador.mudarEstado('acender');
   jogador.anim.tocar('acender', 1.6);
   jogador.rot = Math.atan2(f.dados.x - jogador.pos.x, f.dados.z - jogador.pos.z);
+  if (emPrimeiraPessoa()) {
+    cam.yaw = jogador.rot;
+    cam.pitch = 0.45;
+  }
   audio.acenderFogueira();
   $('fogueira-nome').textContent = f.dados.nome;
   $('ecra-fogueira').style.opacity = 1;
@@ -483,7 +513,7 @@ function viajarPara(f) {
     colocarJuntoFogueira(f.dados);
     reporInimigos();
     descansar(f);
-    cam.yaw = jogador.rot + Math.PI * 0.8;
+    cam.yaw = emPrimeiraPessoa() ? jogador.rot : jogador.rot + Math.PI * 0.8;
     setTimeout(() => fade(0), 400);
   }, 1000);
 }
@@ -765,7 +795,157 @@ function atualizarCamara(dt, rato) {
   }
 }
 
+// Primeira pessoa: a câmara fica nos olhos do Cinzento. Rolar, cair, morrer e sentar movem-na como
+// moveriam a cabeça; os passos dão-lhe um balanço leve.
+function atualizarCamaraFP(dt, rato) {
+  const J = jogador;
+  const alvo = J.alvo && J.alvo.vivo ? J.alvo : null;
+  if (J.alvo && (!J.alvo.vivo || J.alvo.pos.distanceTo(J.pos) > 32)) J.alvo = null;
+  const e = J.estado;
+  const olharRot = e === 'sentado' || e === 'nevoeiro';
+  if (alvo && !olharRot) {
+    const dx = alvo.pos.x - J.pos.x;
+    const dz = alvo.pos.z - J.pos.z;
+    const d = Math.hypot(dx, dz);
+    let dif = Math.atan2(dx, dz) - cam.yaw;
+    while (dif > Math.PI) dif -= Math.PI * 2;
+    while (dif < -Math.PI) dif += Math.PI * 2;
+    cam.yaw += dif * Math.min(1, dt * 9);
+    const pAlvo = Math.atan2(J.pos.y + cam.olhos - (alvo.pos.y + alvo.altura * 0.62), Math.max(0.5, d));
+    cam.pitch += (pAlvo - cam.pitch) * Math.min(1, dt * 6);
+    if (Math.abs(rato.dx) > 40) trocarAlvo(-Math.sign(rato.dx));
+    if (rato.roda) trocarAlvo(rato.roda);
+    if (entrada.direitoX && Math.abs(entrada.direitoX) > 0.8 && !cam.trocou) {
+      trocarAlvo(-Math.sign(entrada.direitoX));
+      cam.trocou = true;
+    }
+    if (!entrada.direitoX || Math.abs(entrada.direitoX) < 0.3) cam.trocou = false;
+  } else if (olharRot) {
+    // sentado à fogueira ou a atravessar o nevoeiro: a cabeça vira-se para onde o corpo está virado
+    let dif = J.rot - cam.yaw;
+    while (dif > Math.PI) dif -= Math.PI * 2;
+    while (dif < -Math.PI) dif += Math.PI * 2;
+    cam.yaw += dif * Math.min(1, dt * 4);
+    cam.pitch += ((e === 'sentado' ? 0.3 : 0.05) - cam.pitch) * Math.min(1, dt * 3);
+  } else if (e !== 'morto') {
+    cam.yaw -= rato.dx * 0.0023;
+    cam.pitch += rato.dy * 0.0023;
+  }
+  cam.pitch = Math.max(-1.35, Math.min(1.35, cam.pitch));
+
+  // desvios da cabeça para cada estado
+  let baixar = 0;
+  let inclinar = 0;
+  let rolo = 0;
+  const t = J.t;
+  if (e === 'rolar') {
+    const k = Math.min(1, t / 0.66);
+    baixar = Math.sin(k * Math.PI) * 0.85;
+    inclinar = J.rolTras ? -Math.sin(k * Math.PI) * 0.5 : Math.sin(Math.min(1, k * 1.25) * Math.PI) * 0.9;
+  } else if (e === 'derrubado') {
+    const k = t < 0.45 ? t / 0.45 : t < 1.15 ? 1 : 1 - (t - 1.15) / 0.55;
+    baixar = suave01(k) * 1.25;
+    inclinar = -suave01(k) * 0.75;
+    rolo = suave01(k) * 0.25;
+  } else if (e === 'morto') {
+    const k = suave01(Math.min(1, t / 1.3));
+    baixar = k * 1.38;
+    inclinar = -k * 0.35;
+    rolo = k * 1.25;
+  } else if (e === 'sentado') {
+    baixar = 0.72;
+  } else if (e === 'acender') {
+    baixar = Math.sin(Math.min(1, t / 1.6) * Math.PI) * 0.55;
+    inclinar = Math.sin(Math.min(1, t / 1.6) * Math.PI) * 0.25;
+  } else if (e === 'atordoado') {
+    const k = Math.max(0, 1 - t / Math.max(0.3, J.durAtordoado || 0.4));
+    inclinar = -0.18 * k;
+    rolo = Math.sin(t * 22) * 0.05 * k;
+  } else if (e === 'ataque' && J.ataque) {
+    // o tronco acompanha o golpe
+    const d = J.ataque.def;
+    const k = t < d.ini ? t / d.ini : Math.max(0, 1 - (t - d.ini) / Math.max(0.1, d.dur - d.ini));
+    const lado = J.ataque.anim === 'leve2' ? 1 : J.ataque.anim === 'forte' ? 0 : -1;
+    rolo = lado * Math.sin(k * Math.PI * 0.5) * 0.035;
+    inclinar = (J.ataque.forte ? (t < d.ini ? -0.05 : 0.08) : 0.02) * Math.sin(k * Math.PI * 0.5);
+    baixar = J.ataque.forte && t > d.ini ? 0.08 * k : 0;
+  } else if (e === 'beber') {
+    inclinar = -Math.sin(Math.min(1, t / 1.0) * Math.PI) * 0.12;
+  }
+  const kS = Math.min(1, dt * (e === 'rolar' || e === 'derrubado' ? 18 : 8));
+  cam.baixar += (baixar - cam.baixar) * kS;
+  cam.inclinar += (inclinar - cam.inclinar) * kS;
+  cam.rolo += (rolo - cam.rolo) * kS;
+
+  // passos: a cabeça desce em cada pé que pousa e oscila de lado
+  const v = J.velAtual || 0;
+  const kv = Math.min(1.4, v / 4.3);
+  const f = J.anim.fase;
+  const bobY = -(1 - Math.abs(Math.sin(f))) * 0.038 * kv;
+  const bobX = Math.cos(f) * 0.028 * kv;
+  const fx = Math.sin(cam.yaw), fz = Math.cos(cam.yaw);
+  const px = J.pos.x + fx * 0.12 - fz * bobX;
+  const pz = J.pos.z + fz * 0.12 + fx * bobX;
+  let py = J.pos.y + cam.olhos - cam.baixar + bobY;
+  py = Math.max(py, altura(px, pz) + 0.22);
+  camara.position.set(px, py, pz);
+  camara.rotation.order = 'YXZ';
+  camara.rotation.set(-(cam.pitch + cam.inclinar), cam.yaw + Math.PI, cam.rolo + Math.sin(f) * 0.006 * kv);
+  // campo de visão: abre ao correr
+  const fovAlvo = v > 6 ? 80 : 72;
+  cam.fov += (fovAlvo - cam.fov) * Math.min(1, dt * 4);
+  if (Math.abs(camara.fov - cam.fov) > 0.01) {
+    camara.fov = cam.fov;
+    camara.updateProjectionMatrix();
+  }
+  // tremor
+  trauma = Math.max(0, trauma - dt * 1.6);
+  if (trauma > 0) {
+    const k = trauma * trauma;
+    const tt = performance.now() / 1000;
+    camara.rotation.z += Math.sin(tt * 47) * 0.035 * k;
+    camara.rotation.x += Math.sin(tt * 41 + 2) * 0.03 * k;
+    camara.rotation.y += Math.sin(tt * 37 + 4) * 0.02 * k;
+    camara.position.y += Math.sin(tt * 53 + 1) * 0.04 * k;
+  }
+}
+
+const suave01 = (k) => {
+  k = Math.min(1, Math.max(0, k));
+  return k * k * (3 - 2 * k);
+};
+
+// Na primeira pessoa o corpo do jogador não é desenhado mas continua a projetar sombra.
+const materiaisSombra = new Map();
+function materialSoSombra(m) {
+  let s = materiaisSombra.get(m);
+  if (!s) {
+    s = m.clone();
+    s.colorWrite = false;
+    s.depthWrite = false;
+    materiaisSombra.set(m, s);
+  }
+  return s;
+}
+function corpoSoSombra(sim) {
+  jogador.rig.raiz.traverse((o) => {
+    if (!o.isMesh) return;
+    const u = o.userData;
+    if (sim && !u.matOriginal) {
+      u.matOriginal = o.material;
+      o.material = Array.isArray(o.material) ? o.material.map(materialSoSombra) : materialSoSombra(o.material);
+    } else if (!sim && u.matOriginal) {
+      o.material = u.matOriginal;
+      u.matOriginal = null;
+    }
+  });
+}
+
 function posicionarCamaraTitulo(t) {
+  if (camara.fov !== 58) {
+    camara.fov = 58;
+    camara.updateProjectionMatrix();
+  }
   const f = FOGUEIRAS[0];
   const a = 2.6 + Math.sin(t * 0.03) * 0.25;
   const x = f.x + Math.sin(a) * 9;
@@ -943,6 +1123,7 @@ function prepararOpcoes() {
   $('op-volume').value = opcoes.volume;
   $('op-inverter').checked = opcoes.inverter;
   $('op-fps').checked = opcoes.fps;
+  $('op-camara').value = opcoes.camara;
 }
 
 function ligarMenus() {
@@ -998,6 +1179,14 @@ function ligarMenus() {
     opcoes.inverter = e.target.checked;
     entrada.inverterY = opcoes.inverter;
     escrever(CHAVE_OP, opcoes);
+  };
+  $('op-camara').onchange = (e) => {
+    opcoes.camara = e.target.value;
+    escrever(CHAVE_OP, opcoes);
+    if (jogador) {
+      cam.yaw = jogador.rot;
+      cam.pitch = emPrimeiraPessoa() ? 0.05 : 0.25;
+    }
   };
   $('op-fps').onchange = (e) => {
     opcoes.fps = e.target.checked;
@@ -1252,7 +1441,21 @@ function passo(dt) {
     if (f.acesa && Math.hypot(f.dados.x - jogador.pos.x, f.dados.z - jogador.pos.z) < 12 && Math.random() < dt * 10) audio.crepitar();
   }
 
-  atualizarCamara(dt, rato);
+  const fp = emPrimeiraPessoa();
+  if (fp) atualizarCamaraFP(dt, rato);
+  else {
+    if (camara.fov !== 58) {
+      camara.fov = 58;
+      camara.updateProjectionMatrix();
+    }
+    atualizarCamara(dt, rato);
+  }
+  corpoSoSombra(fp);
+  if (fp) {
+    const lf = mundo.luzesFogo[0];
+    pp.atualizar(dt, jogador, camara, cam.yaw, cam.pitch, lf.intensity > 0 ? { pos: lf.position, intensidade: lf.intensity } : null);
+  }
+  pontoMira.classList.toggle('visivel', fp && !jogador.alvo && jogador.estado !== 'morto' && jogador.estado !== 'sentado');
   mundo.atualizar(dt, jogador.pos, camara);
   efeitos.atualizar(dtSim, jogador.pos);
   // a interface é atualizada a 30 Hz e a bússola a 12 Hz (chega e poupa trabalho ao browser)
@@ -1282,8 +1485,20 @@ let quadroN = 0;
 function desenhar() {
   quadroN++;
   if (renderer.shadowMap.enabled && (quadroN % 2 === 1 || modo === 'titulo')) renderer.shadowMap.needsUpdate = true;
-  if (composer) composer.render();
-  else renderer.render(cena, camara);
+  const bracos = pp && emPrimeiraPessoa() && (modo === 'jogo' || modo === 'morte');
+  if (composer) {
+    passoBracos.enabled = bracos;
+    composer.render();
+  } else {
+    renderer.render(cena, camara);
+    if (bracos) {
+      // segunda camada: só se limpa a profundidade, para os braços nunca entrarem nas paredes
+      renderer.autoClear = false;
+      renderer.clearDepth();
+      renderer.render(pp.cena, pp.cam);
+      renderer.autoClear = true;
+    }
+  }
 }
 
 ligarMenus();
@@ -1295,7 +1510,7 @@ arrancar().catch((e) => {
 // acesso para depuração na consola do browser
 window.valdoria = {
   get jogador() { return jogador; }, get mundo() { return mundo; }, get modo() { return modo; }, get menu() { return menu; }, inimigos, cam, camara, progresso, hud,
-  desenharSo: () => desenhar(), renderer, cena, comecar, descansar, ir(x, z) { jogador.colocar(x, z, jogador.rot); },
+  desenharSo: () => desenhar(), renderer, cena, comecar, opcoes, get pp() { return pp; }, descansar, ir(x, z) { jogador.colocar(x, z, jogador.rot); },
   // avança a simulação sem depender do relógio (testes automáticos)
   simular(seg, dt = 1 / 30, antes, semDesenho) {
     for (let t = 0; t < seg; t += dt) {

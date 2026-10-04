@@ -2,7 +2,7 @@
 import * as THREE from '../vendor/three.js';
 import { ruidoPeriodico, aleatorio } from './ruido.js';
 
-function fbmP(ruido, x, y, oitavas, periodoBase) {
+export function fbmP(ruido, x, y, oitavas, periodoBase) {
   // fbm periódico: cada oitava usa um período múltiplo do anterior para continuar sem costuras
   let soma = 0;
   let amp = 1;
@@ -17,13 +17,13 @@ function fbmP(ruido, x, y, oitavas, periodoBase) {
   return soma / norma;
 }
 
-function criarCanvas(tam) {
+export function criarCanvas(tam) {
   const c = document.createElement('canvas');
   c.width = c.height = tam;
   return c;
 }
 
-function paraTextura(canvas, srgb = true, anisotropia = 8) {
+export function paraTextura(canvas, srgb = true, anisotropia = 8) {
   const t = new THREE.CanvasTexture(canvas);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.anisotropy = anisotropia;
@@ -35,7 +35,7 @@ function paraTextura(canvas, srgb = true, anisotropia = 8) {
 }
 
 // Gera cor e altura ao mesmo tempo; a altura dá origem ao mapa de normais.
-function gerar(tam, fn) {
+export function gerar(tam, fn) {
   const cor = criarCanvas(tam);
   const ctx = cor.getContext('2d');
   const img = ctx.createImageData(tam, tam);
@@ -56,7 +56,7 @@ function gerar(tam, fn) {
   return { cor, alt };
 }
 
-function normalDeAltura(alt, tam, forca) {
+export function normalDeAltura(alt, tam, forca) {
   const c = criarCanvas(tam);
   const ctx = c.getContext('2d');
   const img = ctx.createImageData(tam, tam);

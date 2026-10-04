@@ -334,13 +334,17 @@ export class Jogador {
     const v = Math.hypot(this.vel.x, this.vel.z);
     let lateral = 0;
     let atras = false;
-    if (temAlvo && v > 0.3) {
+    // na primeira pessoa o corpo olha sempre para onde olha a câmara (só se vê a sua sombra)
+    const fp = ctx.primeiraPessoa && !['morto', 'sentado', 'rolar', 'derrubado', 'nevoeiro'].includes(this.estado);
+    if (fp) this.rot = yawCam;
+    if ((temAlvo || fp) && v > 0.3) {
       const fl = Math.sin(this.rot) * this.vel.x + Math.cos(this.rot) * this.vel.z;
       const lt = -Math.cos(this.rot) * this.vel.x + Math.sin(this.rot) * this.vel.z;
       lateral = Math.abs(lt) > Math.abs(fl) ? Math.sign(lt) : 0;
       atras = fl < -0.5;
     }
     const vAnim = this.estado === 'livre' || this.estado === 'beber' || this.estado === 'nevoeiro' ? v * lento : 0;
+    this.velAtual = vAnim;
     this.anim.atualizar(dt, vAnim, { corrida, lateral, atras });
 
     // passos
@@ -396,7 +400,7 @@ export class Jogador {
     this.mudarEstado('ataque');
     const anim = forte ? 'forte' : this.combo % 2 === 0 ? 'leve1' : 'leve2';
     this.combo++;
-    this.ataque = { def, forte, golpeados: new Set(), somou: false };
+    this.ataque = { def, forte, anim, golpeados: new Set(), somou: false };
     this.anim.tocar(anim, def.dur);
   }
 
