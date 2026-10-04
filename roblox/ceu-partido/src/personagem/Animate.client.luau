@@ -1,0 +1,1 @@
+-- Substitui as animações padrão do Roblox: as animações deste jogo são feitas por código (Cliente/Animador).

@@ -52,6 +52,11 @@ Para o publicar no site: **Painel → Publicar jogo → Pasta do GitHub** e esco
 Para o experimentar localmente: `npx serve jogos/cinzas-de-valdoria` (ou qualquer servidor estático) e abrir o endereço indicado.
 O código está em `jogos/cinzas-de-valdoria/js/` (um módulo por área: `mundo.js`, `atores.js`, `modelos.js`, `principal.js`…).
 
+### Céu Partido — versão Roblox
+
+[`roblox/ceu-partido/`](roblox/ceu-partido/) é a versão para Roblox: ilhas flutuantes, combate souls-like exigente e cooperativo até 4 jogadores.
+Abre `roblox/ceu-partido/CeuPartido.rbxlx` no Roblox Studio — instruções em [`roblox/ceu-partido/LEIA-ME.md`](roblox/ceu-partido/LEIA-ME.md).
+
 ## Cópias de segurança
 
 Antes de grandes alterações é guardada uma cópia do código num ramo `backup/AAAA-MM-DD` no GitHub

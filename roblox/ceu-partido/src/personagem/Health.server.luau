@@ -1,0 +1,1 @@
+-- Substitui a regeneração automática de vida do Roblox: aqui só se cura com o Orvalho Celeste ou nos faróis.
