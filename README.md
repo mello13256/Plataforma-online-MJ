@@ -29,6 +29,41 @@ Funciona 100% no plano gratuito do Firebase (Spark):
 - Estatísticas (jogos, jogadas, gostos, autores) e **espaço usado** face ao limite gratuito de 1 GB.
 - Todos os jogos com filtro, editar e remover; criar contas; permissões de cada utilizador.
 
+## Jogos incluídos no repositório
+
+### Cinzas de Valdoria — RPG souls-like 3D de mundo aberto
+
+[`jogos/cinzas-de-valdoria/`](jogos/cinzas-de-valdoria/) é um RPG de ação para um jogador, inspirado em *Dark Souls* e *Elden Ring*,
+que corre diretamente no browser (Three.js, sem instalar nada). Tudo é gerado por código: terreno, texturas, árvores, personagens, animações e sons.
+
+- **Mundo aberto** de 1,4 × 1,4 km com 6 regiões: Cemitério das Cinzas, Planície Esquecida, Pântano dos Afogados,
+  Ruínas de Aldermoor, Estrada dos Reis e Fortaleza do Rei Caído — com montanhas, lagos, relva ao vento, nevoeiro e a Árvore Áurea no horizonte.
+- **Combate souls-like**: ataques leves em combo e fortes, bloqueio com escudo, rolamentos com invulnerabilidade, energia,
+  equilíbrio (atordoar inimigos), fixar alvo, frasco de cura e três armas (espada longa, machado de guerra, espadão).
+- **Primeira pessoa** (por omissão): braços com manoplas articuladas, braçal de placas e malha de aço, espada, machado e espadão
+  detalhados, escudo pintado e frasco a brilhar — animados para cada golpe, bloqueio, gole, rolamento e queda, com rasto da lâmina.
+  O corpo continua a projetar sombra. A terceira pessoa continua disponível nas Opções.
+- **Mundo**: pinheiros e árvores douradas com folhagem, arbustos, fetos, troncos caídos, juncos e nenúfares no pântano turvo;
+  estátuas gigantes de pedra, círculo de menires, cripta, forca, carroças, atalaia, torre de menagem e lanternas ao longo dos caminhos.
+- **Níveis de detalhe**: quanto mais longe do jogador, mais simples ficam árvores, vegetação, sombras e inimigos;
+  a distância ajusta-se em Opções → Distância de detalhe (sem recarregar).
+- **Fogueiras**: acender, descansar (os inimigos regressam), subir de nível (Vitalidade, Resistência, Força) e viajar entre fogueiras.
+- **Morte**: as almas ficam no local onde morreste — volta lá para as recuperar antes de morreres outra vez.
+- **Inimigos** com armaduras de placas, malha de aço, brasões pintados, trapos rasgados e pelo — esvaziados, lobos sombrios, cavaleiros caídos e dois chefes — *Fenrath, o Lobo Ancestral* e
+  *Valdor, o Rei Caído* (atrás de uma porta de nevoeiro, com segunda fase em chamas).
+- Mapa, bússola, mensagens no chão, gravação automática no browser, teclado e rato, **comando** e controlos táteis.
+- Opções de câmara (primeira/terceira pessoa), qualidade gráfica (baixa/média/alta), sensibilidade, volume e eixo invertido.
+
+Para o publicar no site: **Painel → Publicar jogo → Pasta do GitHub** e escolher `cinzas-de-valdoria` (a capa é detetada automaticamente).
+
+Para o experimentar localmente: `npx serve jogos/cinzas-de-valdoria` (ou qualquer servidor estático) e abrir o endereço indicado.
+O código está em `jogos/cinzas-de-valdoria/js/` (um módulo por área: `mundo.js`, `folhagem.js`, `atores.js`, `modelos.js`, `primeira-pessoa.js`, `principal.js`…).
+
+### Céu Partido — versão Roblox
+
+[`roblox/ceu-partido/`](roblox/ceu-partido/) é a versão para Roblox: ilhas flutuantes, combate souls-like exigente e cooperativo até 4 jogadores.
+Abre `roblox/ceu-partido/CeuPartido.rbxlx` no Roblox Studio — instruções em [`roblox/ceu-partido/LEIA-ME.md`](roblox/ceu-partido/LEIA-ME.md).
+
 ## Cópias de segurança
 
 Antes de grandes alterações é guardada uma cópia do código num ramo `backup/AAAA-MM-DD` no GitHub
