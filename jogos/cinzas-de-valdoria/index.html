@@ -2,6 +2,11 @@
 <html lang="pt-PT">
 <head>
 <meta charset="utf-8">
+<script>
+  // Se o endereço vier sem a barra final (ex.: /jogos/cinzas-de-valdoria), os ficheiros do jogo seriam
+  // procurados na pasta de cima e o jogo ficava preso a carregar; a base corrige os caminhos relativos.
+  if (!/\/$|\.html?$/i.test(location.pathname)) document.write('<base href="' + location.pathname + '/">');
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Cinzas de Valdoria</title>
 <meta name="description" content="RPG de ação souls-like em 3D, de mundo aberto, para um jogador.">
