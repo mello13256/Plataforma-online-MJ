@@ -43,6 +43,10 @@ que corre diretamente no browser (Three.js, sem instalar nada). Tudo é gerado p
 - **Primeira pessoa** (por omissão): braços com manoplas articuladas, braçal de placas e malha de aço, espada, machado e espadão
   detalhados, escudo pintado e frasco a brilhar — animados para cada golpe, bloqueio, gole, rolamento e queda, com rasto da lâmina.
   O corpo continua a projetar sombra. A terceira pessoa continua disponível nas Opções.
+- **Mundo**: pinheiros e árvores douradas com folhagem, arbustos, fetos, troncos caídos, juncos e nenúfares no pântano turvo;
+  estátuas gigantes de pedra, círculo de menires, cripta, forca, carroças, atalaia, torre de menagem e lanternas ao longo dos caminhos.
+- **Níveis de detalhe**: quanto mais longe do jogador, mais simples ficam árvores, vegetação, sombras e inimigos;
+  a distância ajusta-se em Opções → Distância de detalhe (sem recarregar).
 - **Fogueiras**: acender, descansar (os inimigos regressam), subir de nível (Vitalidade, Resistência, Força) e viajar entre fogueiras.
 - **Morte**: as almas ficam no local onde morreste — volta lá para as recuperar antes de morreres outra vez.
 - **Inimigos** com armaduras de placas, malha de aço, brasões pintados, trapos rasgados e pelo — esvaziados, lobos sombrios, cavaleiros caídos e dois chefes — *Fenrath, o Lobo Ancestral* e
@@ -53,7 +57,7 @@ que corre diretamente no browser (Three.js, sem instalar nada). Tudo é gerado p
 Para o publicar no site: **Painel → Publicar jogo → Pasta do GitHub** e escolher `cinzas-de-valdoria` (a capa é detetada automaticamente).
 
 Para o experimentar localmente: `npx serve jogos/cinzas-de-valdoria` (ou qualquer servidor estático) e abrir o endereço indicado.
-O código está em `jogos/cinzas-de-valdoria/js/` (um módulo por área: `mundo.js`, `atores.js`, `modelos.js`, `primeira-pessoa.js`, `principal.js`…).
+O código está em `jogos/cinzas-de-valdoria/js/` (um módulo por área: `mundo.js`, `folhagem.js`, `atores.js`, `modelos.js`, `primeira-pessoa.js`, `principal.js`…).
 
 ### Céu Partido — versão Roblox
 

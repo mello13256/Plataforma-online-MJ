@@ -4,6 +4,10 @@ import { criarSimplex, fbm, cristas, suave, misturar, aleatorio, limitar } from 
 import {
   MUNDO, CAMINHOS, ZONAS_PLANAS, PANTANO, FORTALEZA, FOGUEIRAS, ARENA_LOBO, ITENS, INIMIGOS, REGIOES,
 } from './dados.js';
+import {
+  criarTexturasFolhagem, materialFolhas, materialLonge, arvoreDourada, pinheiro, arbusto, feto, juncos, nenufar, troncoCaido, cepo,
+} from './folhagem.js';
+import { criarHumanoide, Animador } from './modelos.js';
 
 const s1 = criarSimplex(101);
 const s2 = criarSimplex(202);
@@ -352,6 +356,17 @@ export class Mundo {
     this.lotes = {};
     this.excluir = []; // zonas onde não nasce vegetação
     this.portaNevoeiro = null;
+    this.distDetalhe = 1; // multiplicador da distância de detalhe (Opções)
+  }
+
+  // Quanto maior, mais longe se mantém a qualidade alta (árvores detalhadas, vegetação, sombras).
+  definirDistanciaDetalhe(mult) {
+    this.distDetalhe = mult;
+    if (this.uPerto) {
+      this.raioArvores = this.raioArvoresBase * mult;
+      this.uPerto.value.z = this.raioArvores;
+      this.centroArvores.set(1e9, 1e9); // força nova escolha das árvores detalhadas
+    }
   }
 
   // ---------- terreno ----------
@@ -446,10 +461,15 @@ export class Mundo {
           #else
             vec3 cRocha = texture2D(tRocha, (abs(nM.x) > abs(nM.z) ? vPosM.zy : vPosM.xy) * 0.12).rgb;
           #endif
-            c = mix(c, cRocha * (0.8 + 0.4 * macro), wR);
+            // estratos da rocha e tons quentes/frios; o alto das montanhas é mais escuro e frio
+            float estrato = sin(vPosM.y * 0.32 + macro * 14.0 + vPosM.x * 0.013 + vPosM.z * 0.009) * 0.5 + 0.5;
+            cRocha *= mix(vec3(0.84, 0.8, 0.75), vec3(1.0, 0.96, 0.9), estrato);
+            cRocha *= mix(vec3(1.0), vec3(0.74, 0.76, 0.8), smoothstep(30.0, 130.0, vPosM.y));
+            cRocha *= 0.62 + 0.5 * macro;
+            c = mix(c, cRocha, wR);
           }
-          float neve = smoothstep(105.0, 140.0, vPosM.y + macro * 30.0) * (1.0 - wR * 0.7);
-          c = mix(c, vec3(0.55, 0.55, 0.57) * (0.85 + 0.3 * macro), neve);
+          float neve = smoothstep(85.0, 125.0, vPosM.y + macro * 30.0) * smoothstep(0.55, 0.82, nM.y + macro * 0.15);
+          c = mix(c, vec3(0.82, 0.84, 0.88) * (0.9 + 0.15 * macro), neve);
           float molhado = smoothstep(0.6, -0.2, vPosM.y);
           c *= 1.0 - molhado * 0.45;
           diffuseColor.rgb *= c;
@@ -603,6 +623,21 @@ export class Mundo {
       color: 0x1f2a22, roughness: 0.06, metalness: 0.15, normalMap: nm, normalScale: new THREE.Vector2(0.35, 0.35),
       transparent: true, opacity: 0.86,
     });
+    mat.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec2 vXZ;')
+        .replace('#include <fog_vertex>', '#include <fog_vertex>\nvXZ = (modelMatrix * vec4(position, 1.0)).xz;');
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying vec2 vXZ;')
+        .replace('#include <color_fragment>', `#include <color_fragment>
+          float pant = smoothstep(1.0, 0.65, distance(vXZ, vec2(${PANTANO.x.toFixed(1)}, ${PANTANO.z.toFixed(1)})) / ${PANTANO.r.toFixed(1)});
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.10, 0.11, 0.05), pant);
+          diffuseColor.a = mix(diffuseColor.a, 0.97, pant);`)
+        .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+          roughnessFactor = mix(roughnessFactor, 0.6, pant);`)
+        .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
+          metalnessFactor = mix(metalnessFactor, 0.0, pant);`);
+    };
     const agua = new THREE.Mesh(g, mat);
     agua.position.set(0, 0, 0);
     agua.receiveShadow = true;
@@ -749,6 +784,7 @@ export class Mundo {
         if (Math.hypot(x - (-418), z - 398) < 6) continue;
         if (x < -455 && z < 450 && z > 425) continue; // capela
         if (Math.hypot(x - (-445), z - 430) < 3.5) continue; // sítio onde o jogador desperta
+        if (Math.hypot(x - (-452), z - 409) < 4) continue; // estátua
         const h = altura(x, z);
         const ang = (rnd() - 0.5) * 0.4;
         this.colisoes.circulo(x, z, 0.32, h + 1.2);
@@ -879,7 +915,270 @@ export class Mundo {
       this.portaNevoeiro = { mesh: nev, colisor: col, x: fx, z: gz, ativa: true };
     }
 
+    this.gerarMarcos();
     this.construirLotes();
+  }
+
+  // Estátua de pedra a partir do modelo de uma personagem, numa pose fixa (uma só malha).
+  estatua(estilo, x, z, escala, rot, { anim = null, t = 0, mat, base = 0, arma = 0 } = {}) {
+    const todos = new Proxy({}, { get: () => mat });
+    const rig = criarHumanoide(estilo, todos);
+    if (rig.frasco) rig.frasco.parent.remove(rig.frasco);
+    const a = new Animador(rig);
+    if (anim) a.tocar(anim, 1.6, { manter: true });
+    for (let i = 0; i < 40; i++) a.atualizar(t / 40 || 1 / 30, 0, {});
+    if (arma) rig.arma.rotation.x = arma;
+    rig.raiz.updateMatrixWorld(true);
+    const geos = [];
+    rig.raiz.traverse((o) => {
+      if (!o.isMesh || !o.visible) return;
+      let g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+      for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k);
+      if (!g.attributes.uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
+      g.clearGroups();
+      g.applyMatrix4(o.matrixWorld);
+      geos.push(g);
+    });
+    const geo = THREE.mergeGeometries(geos, false);
+    // UVs em caixa para a textura de pedra não ficar esticada
+    uvCaixa(geo, 1.2);
+    const m = new THREE.Mesh(geo, mat);
+    const y = altura(x, z) + base;
+    m.position.set(x, y, z);
+    m.scale.setScalar(escala);
+    m.rotation.y = rot;
+    m.castShadow = true;
+    m.receiveShadow = true;
+    this.cena.add(m);
+    return m;
+  }
+
+  // Marcos: estátuas, círculo de pedras, lanternas nos caminhos, carroças, forca, cripta, atalaia e torre de menagem.
+  gerarMarcos() {
+    const t = this.tex;
+    const matEstatua = new THREE.MeshStandardMaterial({ map: t.rocha, normalMap: t.rochaN, color: 0x9c978c, roughness: 0.95 });
+    const rnd = aleatorio(909);
+    const plinto = (x, z, l, alt, rot = 0) => {
+      const h = altura(x, z);
+      this.caixa('pedra', x, h + alt / 2 - 0.4, z, l, alt + 0.8, l, rot);
+      this.caixa('pedra', x, h + alt + 0.1, z, l * 0.86, 0.3, l * 0.86, rot);
+      this.colisoes.caixa(x, z, l / 2, l / 2, -rot, h + alt);
+      return h + alt + 0.25 - h;
+    };
+
+    // Cavaleiro ajoelhado gigante na planície, de espada cravada no chão, a olhar a encruzilhada
+    {
+      const x = -95, z = 15;
+      const rot = Math.atan2(14 - x, 112 - z);
+      const b = plinto(x, z, 12, 1.6, rot);
+      this.estatua('cavaleiro', x, z, 9, rot, { anim: 'acender', t: 0.9, mat: matEstatua, base: b, arma: Math.PI * 0.5 });
+      this.colisoes.circulo(x, z, 6.5, altura(x, z) + 14);
+      this.excluir.push({ x, z, r: 11 });
+    }
+    // Peregrino a rezar no cemitério
+    {
+      const x = -452, z = 409;
+      const b = plinto(x, z, 2.2, 0.8, 0.3);
+      this.estatua('esvaziado', x, z, 1.9, 0.3 + Math.PI, { anim: 'sentado', t: 1, mat: matEstatua, base: b });
+    }
+    // Dois guardiões de pedra à entrada da fortaleza
+    {
+      const { x: fx, z: fz, metade: m } = FORTALEZA;
+      for (const lado of [-1, 1]) {
+        const x = fx + lado * 15, z = fz + m + 10;
+        const b = plinto(x, z, 4, 2.2);
+        this.estatua('cavaleiro', x, z, 4.2, 0, { mat: matEstatua, base: b });
+      }
+    }
+
+    // Círculo de pedras numa colina, com altar ao centro
+    {
+      const cx = 60, cz = 300, r = 11;
+      for (let i = 0; i < 11; i++) {
+        const a = (i / 11) * Math.PI * 2;
+        const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
+        const h = altura(x, z);
+        const alt = 3.5 + rnd() * 2.5;
+        if (i === 4) {
+          this.caixa('pedraEscura', x, h + 0.4, z, 1.2, 0.8, 3.6, -a, Math.PI / 2 - 0.2, 0.1); // pedra tombada
+          continue;
+        }
+        this.caixa('pedraEscura', x, h + alt / 2 - 0.5, z, 1.3 + rnd() * 0.4, alt, 0.8 + rnd() * 0.3, -a + Math.PI / 2, (rnd() - 0.5) * 0.12, (rnd() - 0.5) * 0.12);
+        if (i % 3 === 0) {
+          // lintel por cima de duas pedras
+          const a2 = ((i + 1) / 11) * Math.PI * 2;
+          const x2 = cx + Math.cos((a + a2) / 2) * r, z2 = cz + Math.sin((a + a2) / 2) * r;
+          this.caixa('pedraEscura', x2, h + alt - 0.3, z2, 1.0, 0.8, 7, -(a + a2) / 2);
+        }
+        this.colisoes.circulo(x, z, 0.8, h + alt);
+      }
+      const h = altura(cx, cz);
+      this.caixa('pedraEscura', cx, h + 0.45, cz, 2.6, 0.9, 1.6, 0.4);
+      this.colisoes.caixa(cx, cz, 1.3, 0.8, -0.4, h + 0.9);
+      this.excluir.push({ x: cx, z: cz, r: r + 3 });
+    }
+
+    // Lanternas de ferro ao longo dos caminhos
+    {
+      const longeDe = (x, z) => FOGUEIRAS.every((f) => Math.hypot(f.x - x, f.z - z) > 9)
+        && Math.hypot(x - FORTALEZA.x, z - FORTALEZA.z) > FORTALEZA.metade + 8 && Math.hypot(x - ARENA_LOBO.x, z - ARENA_LOBO.z) > ARENA_LOBO.r + 4;
+      let n = 0;
+      for (const cam of CAMINHOS) {
+        let acum = 20;
+        for (let i = 0; i < cam.length - 1; i++) {
+          const [ax, az] = cam[i], [bx, bz] = cam[i + 1];
+          const L = Math.hypot(bx - ax, bz - az);
+          const dx = (bx - ax) / L, dz = (bz - az) / L;
+          for (let d = acum; d < L; d += 42) {
+            const lado = n++ % 2 ? 1 : -1;
+            const x = ax + dx * d - dz * 3.4 * lado;
+            const z = az + dz * d + dx * 3.4 * lado;
+            acum = d + 42 - L;
+            if (!longeDe(x, z)) continue;
+            const h = altura(x, z);
+            const ang = Math.atan2(-dz * lado, dx * lado);
+            this.caixa('madeira', x, h + 1.6, z, 0.2, 3.6, 0.2, (rnd() - 0.5) * 0.3);
+            const bx2 = x + dz * lado * 0.55, bz2 = z - dx * lado * 0.55;
+            this.caixa('madeira', (x + bx2) / 2, h + 3.25, (z + bz2) / 2, 0.12, 0.12, 0.75, Math.atan2(dz * lado, -dx * lado));
+            this.caixa('ferro', bx2, h + 3.0, bz2, 0.36, 0.06, 0.36, ang);
+            this.caixa('ferro', bx2, h + 2.62, bz2, 0.3, 0.05, 0.3, ang);
+            this.caixa('lanterna', bx2, h + 2.8, bz2, 0.24, 0.32, 0.24, ang);
+            this.cilindro('ferro', bx2, h + 3.15, bz2, 0.02, 0.2, 0.22, 4, ang + Math.PI / 4);
+            this.colisoes.circulo(x, z, 0.2, h + 3.4);
+          }
+        }
+      }
+    }
+
+    // Carroças partidas junto aos caminhos, com caixotes e barris
+    for (const [x, z, a] of [[-185, 212, 0.9], [118, -82, 2.6], [252, 196, 0.2], [-30, 52, 1.6]]) {
+      const h = altura(x, z);
+      const c = Math.cos(a), sn = Math.sin(a);
+      const P = (lx, lz) => [x + lx * c + lz * sn, z - lx * sn + lz * c];
+      this.caixa('madeira', x, h + 0.75, z, 1.6, 0.12, 3.0, a, 0, 0.18);
+      for (const lx of [-0.8, 0.8]) {
+        const [px, pz] = P(lx, 0);
+        this.caixa('madeira', px, h + 1.0 + (lx > 0 ? 0.28 : -0.28), pz, 0.08, 0.5, 3.0, a, 0, 0.18);
+      }
+      const [r1x, r1z] = P(-0.9, 0.7);
+      this.cilindro('madeira', r1x, h + 0.55, r1z, 0.55, 0.55, 0.1, 12, a, 0, Math.PI / 2);
+      const [r2x, r2z] = P(1.6, -0.6);
+      this.cilindro('madeira', r2x, h + 0.06, r2z, 0.55, 0.55, 0.1, 12, a + 0.7); // roda caída
+      const [vx, vz] = P(0, 2.2);
+      this.caixa('madeira', vx, h + 0.35, vz, 0.12, 0.12, 2.2, a + 0.15, -0.25);
+      for (let k = 0; k < 3; k++) {
+        const [cx, cz] = P(-1.4 - rnd() * 1.2, -1.5 + rnd() * 3);
+        if (k === 2) this.cilindro('madeira', cx, h + 0.45, cz, 0.38, 0.42, 0.9, 10);
+        else this.caixa('madeira', cx, h + 0.35, cz, 0.7, 0.7, 0.7, rnd() * 3);
+      }
+      this.colisoes.caixa(x, z, 0.9, 1.6, -a, h + 1.2);
+      this.excluir.push({ x, z, r: 4 });
+    }
+
+    // Forca junto à encruzilhada, com uma gaiola pendurada
+    {
+      const x = 40, z = 130, a = 0.5;
+      const h = altura(x, z);
+      const c = Math.cos(a), sn = Math.sin(a);
+      this.caixa('madeira', x, h + 0.25, z, 4.2, 0.5, 3.2, a);
+      this.caixa('madeira', x - 1.4 * c, h + 3.2, z + 1.4 * sn, 0.3, 6, 0.3, a);
+      this.caixa('madeira', x + 0.3 * c, h + 6.0, z - 0.3 * sn, 3.8, 0.28, 0.28, a);
+      this.caixa('madeira', x - 0.9 * c, h + 5.3, z + 0.9 * sn, 0.18, 1.6, 0.18, a, 0, -0.8);
+      const gx = x + 1.6 * c, gz = z - 1.6 * sn;
+      this.cilindro('ferro', gx, h + 5.3, gz, 0.02, 0.02, 1.4, 4);
+      for (let k = 0; k < 8; k++) {
+        const ak = (k / 8) * Math.PI * 2;
+        this.cilindro('ferro', gx + Math.cos(ak) * 0.45, h + 3.9, gz + Math.sin(ak) * 0.45, 0.025, 0.025, 1.6, 4);
+      }
+      this.cilindro('ferro', gx, h + 4.7, gz, 0.5, 0.5, 0.06, 10);
+      this.cilindro('ferro', gx, h + 3.1, gz, 0.5, 0.5, 0.06, 10);
+      this.colisoes.caixa(x, z, 2.1, 1.6, -a, h + 0.5);
+    }
+
+    // Placa da encruzilhada
+    {
+      const x = 22, z = 120;
+      const h = altura(x, z);
+      this.caixa('madeira', x, h + 1.4, z, 0.16, 2.8, 0.16);
+      for (const [a, y] of [[0.4, 2.5], [2.2, 2.2], [-1.4, 1.9]]) {
+        this.caixa('madeira', x + Math.sin(a) * 0.55, h + y, z + Math.cos(a) * 0.55, 0.06, 0.28, 1.1, a);
+      }
+      this.colisoes.circulo(x, z, 0.2, h + 2.8);
+    }
+    // Estandartes no arco da encruzilhada
+    for (const lado of [-1, 1]) this.caixa('tecidoVermelho', 14 + lado * 5, altura(14, 96) + 6.2, 96.85, 1.6, 3.8, 0.05);
+
+    // Cripta fora do muro do cemitério
+    {
+      const x = -392, z = 440, a = -0.15;
+      const h = altura(x, z);
+      const c = Math.cos(a), sn = Math.sin(a);
+      const P = (lx, lz) => [x + lx * c + lz * sn, z - lx * sn + lz * c];
+      this.caixa('pedraEscura', x, h + 0.2, z, 8.5, 1.2, 10.5, a);
+      this.caixa('pedraEscura', x, h + 2.6, z - 0.5 * c, 6.5, 4.4, 7.5, a);
+      // telhado de duas águas
+      for (const lado of [-1, 1]) {
+        const [tx, tz] = P(lado * 1.75, -0.5);
+        this.caixa('pedraEscura', tx, h + 5.6, tz, 3.9, 0.35, 8.6, a, 0, lado * -0.5);
+      }
+      // pórtico com colunas
+      for (const lx of [-2.6, 2.6]) {
+        const [cx, cz] = P(lx, 4.2);
+        this.cilindro('pedra', cx, h + 2.5, cz, 0.32, 0.36, 4.4, 10);
+      }
+      const [fx, fz] = P(0, 4.2);
+      this.caixa('pedra', fx, h + 4.9, fz, 6.6, 0.6, 1.0, a);
+      const [px, pz] = P(0, 3.3);
+      this.caixa('ferro', px, h + 1.9, pz, 1.8, 2.8, 0.12, a);
+      this.colisoes.caixa(x, z - 0.4, 3.4, 4.4, -a, h + 6);
+      this.excluir.push({ x, z, r: 9 });
+    }
+
+    // Atalaia junto à Estrada dos Reis
+    {
+      const x = 140, z = -60;
+      const h = altura(x, z);
+      this.cilindro('pedra', x, h + 8, z, 3.6, 4.2, 17, 14);
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * Math.PI * 2;
+        if (k === 5) continue;
+        this.caixa('pedra', x + Math.cos(a) * 3.6, h + 17.1, z + Math.sin(a) * 3.6, 1.4, 1.4, 1.0, -a + Math.PI / 2);
+      }
+      this.caixa('madeira', x, h + 2, z + 4.15, 1.6, 2.8, 0.2);
+      this.caixa('tecidoVermelho', x + 3.6, h + 12, z, 0.05, 4, 1.4);
+      this.colisoes.circulo(x, z, 4.2, h + 17);
+      this.excluir.push({ x, z, r: 8 });
+    }
+
+    // Torre de menagem atrás da fortaleza (vê-se de longe por cima dos muros)
+    {
+      const { x: fx, z: fz, metade: m } = FORTALEZA;
+      const x = fx + 8, z = fz - m - 20;
+      const h = altura(x, z) - 2;
+      this.caixa('pedraEscura', x, h + 22, z, 15, 44, 15);
+      this.caixa('pedraEscura', x, h + 44.4, z, 16.4, 1.2, 16.4);
+      for (let k = 0; k < 16; k++) {
+        const lado = Math.floor(k / 4), i = k % 4;
+        const off = -6 + i * 4;
+        const [ox, oz] = [[off, -7.6], [7.6, off], [off, 7.6], [-7.6, off]][lado];
+        this.caixa('pedraEscura', x + ox, h + 45.6, z + oz, 1.8, 1.6, 1.8);
+      }
+      // janelas escuras
+      for (const y of [18, 28, 36]) this.caixa('pedraEscura', x, h + y, z + 7.55, 1.4, 3.2, 0.2);
+      this.cilindro('pedraEscura', x + 9, h + 30, z - 4, 3, 3.3, 60, 12);
+      this.cilindro('pedraEscura', x + 9, h + 63, z - 4, 0.1, 4, 7, 12);
+      this.caixa('tecidoVermelho', x, h + 40, z + 7.65, 3, 7, 0.05);
+      this.colisoes.caixa(x, z, 7.5, 7.5, 0, h + 44);
+      this.colisoes.circulo(x + 9, z - 4, 3.3, h + 60);
+    }
+    // estandartes ao longo do muro da fortaleza (do lado de fora)
+    {
+      const { x: fx, z: fz, metade: m, alturaMuro: am } = FORTALEZA;
+      for (const ox of [-26, -14, 14, 26]) {
+        const x = fx + ox, z = fz + m + 1.45;
+        this.caixa('tecidoVermelho', x, altura(x, z) + am - 3.2, z, 2.2, 6, 0.05);
+      }
+    }
   }
 
   construirLotes() {
@@ -889,6 +1188,8 @@ export class Mundo {
       pedraEscura: new THREE.MeshStandardMaterial({ map: t.rocha, normalMap: t.rochaN, roughness: 0.9, color: 0x7d7a74 }),
       madeira: new THREE.MeshStandardMaterial({ map: t.casca, normalMap: t.cascaN, roughness: 0.95, color: 0x8a7560 }),
       tecidoVermelho: new THREE.MeshStandardMaterial({ map: t.tecido, color: 0x5a1612, roughness: 1, side: THREE.DoubleSide }),
+      ferro: new THREE.MeshStandardMaterial({ color: 0x2a2826, metalness: 0.8, roughness: 0.6, roughnessMap: t.metalRug }),
+      lanterna: new THREE.MeshStandardMaterial({ color: 0xffc070, emissive: 0xff9a30, emissiveIntensity: 2.2, roughness: 0.4 }),
     };
     for (const [nome, geos] of Object.entries(this.lotes)) {
       if (!geos.length) continue;
@@ -1024,15 +1325,44 @@ export class Mundo {
     const t = this.tex;
     const matCasca = new THREE.MeshStandardMaterial({ map: t.casca, normalMap: t.cascaN, color: 0x9a8a78, roughness: 0.95 });
     const matCascaMorta = new THREE.MeshStandardMaterial({ map: t.casca, normalMap: t.cascaN, color: 0x6e6862, roughness: 0.95 });
-    const matAgulhas = new THREE.MeshStandardMaterial({ color: 0x2b3a25, roughness: 0.9 });
-    const matDourada = new THREE.MeshStandardMaterial({ color: 0xc09030, roughness: 0.75, emissive: 0x3a2400, emissiveIntensity: 0.6 });
     const matRocha = new THREE.MeshStandardMaterial({ map: t.rocha, normalMap: t.rochaN, color: 0xa09a90, roughness: 0.92 });
+    const fol = criarTexturasFolhagem(this.qualidade);
+    this.uFolhas = { value: 0 };
+    const matAgulhas = materialFolhas(fol.agulhas, this.uFolhas, { color: 0xc8d0b8 });
+    const matDourada = materialFolhas(fol.ouro, this.uFolhas, { emissive: 0x6a4400, emissiveMap: fol.ouro, emissiveIntensity: 0.55 });
+    const matArbusto = materialFolhas(fol.verde, this.uFolhas, { color: 0xd0d8c0 });
+    const matArbustoSeco = materialFolhas(fol.seco, this.uFolhas);
+    const matFeto = materialFolhas(fol.feto, this.uFolhas);
+    // árvores de longe (versão simples): as que estão perto do jogador são escondidas e desenhadas em detalhe
+    this.raioArvoresBase = { baixa: 60, media: 85, alta: 110 }[this.qualidade];
+    this.raioArvores = this.raioArvoresBase * this.distDetalhe;
+    this.uPerto = { value: new THREE.Vector3(1e9, 1e9, this.raioArvores) };
+    const matCascaLonge = materialLonge({ map: t.casca, normalMap: t.cascaN, color: 0x9a8a78, roughness: 0.95 }, this.uPerto);
+    // de longe as copas são formas opacas e simples (muito mais baratas de desenhar que folhas recortadas)
+    const matAgulhasLonge = materialLonge({ color: 0x26331f, roughness: 0.95 }, this.uPerto);
+    const matDouradaLonge = materialLonge({ color: 0xb08028, roughness: 0.8, emissive: 0x3a2400, emissiveIntensity: 0.6 }, this.uPerto);
+    const matJunco = new THREE.MeshStandardMaterial({ color: 0x6e6a3c, roughness: 0.9 });
+    const matNenufar = new THREE.MeshStandardMaterial({ color: 0x3c5a2c, roughness: 0.6, side: THREE.DoubleSide });
 
+    // perto: só se desenham a esta distância (vegetação rasteira)
     const tipos = [
-      { geos: [this.geometriaPinheiro(1), this.geometriaPinheiro(2)], mat: [matCasca, matAgulhas], raio: 0.35 },
+      {
+        geos: [pinheiro(1), pinheiro(2), pinheiro(4)], mat: [matCasca, matAgulhas], raio: 0.35,
+        lod: [this.geometriaPinheiro(1), this.geometriaPinheiro(2), this.geometriaPinheiro(4)], matLonge: [matCascaLonge, matAgulhasLonge],
+      },
       { geos: [this.geometriaMorta(3), this.geometriaMorta(5)], mat: matCascaMorta, raio: 0.32 },
-      { geos: [this.geometriaDourada(6), this.geometriaDourada(7)], mat: [matCasca, matDourada], raio: 0.45 },
+      {
+        geos: [arvoreDourada(6), arvoreDourada(7), arvoreDourada(9)], mat: [matCasca, matDourada], raio: 0.45,
+        lod: [this.geometriaDourada(6), this.geometriaDourada(7), this.geometriaDourada(9)], matLonge: [matCascaLonge, matDouradaLonge],
+      },
       { geos: [this.geometriaRocha(8), this.geometriaRocha(10)], mat: matRocha, raio: 0 },
+      { geos: [arbusto(21), arbusto(22)], mat: matArbusto, raio: 0, perto: 170 },
+      { geos: [arbusto(23)], mat: matArbustoSeco, raio: 0, perto: 170 },
+      { geos: [feto(24), feto(25)], mat: matFeto, raio: 0, perto: 110 },
+      { geos: [troncoCaido(26), troncoCaido(27)], mat: matCascaMorta, raio: 0, perto: 200 },
+      { geos: [cepo(28)], mat: matCasca, raio: 0.5, perto: 160 },
+      { geos: [juncos(29), juncos(30)], mat: matJunco, raio: 0, perto: 140 },
+      { geos: [nenufar()], mat: matNenufar, raio: 0, perto: 120 },
     ];
 
     const BLOCO = 175;
@@ -1044,7 +1374,16 @@ export class Mundo {
       const k = bi * nb + bj;
       if (!blocos.has(k)) blocos.set(k, tipos.map((tp) => tp.geos.map(() => [])));
       blocos.get(k)[tipo][variante].push(m);
+      // árvores com versão detalhada: guardadas numa grelha para se encontrarem as que estão perto
+      if (tipos[tipo].lod) {
+        const ck = `${Math.floor(x / 25)},${Math.floor(z / 25)}`;
+        if (!grelha.has(ck)) grelha.set(ck, []);
+        grelha.get(ck).push({ tipo, variante, x, z, m });
+        contagem[tipo][variante]++;
+      }
     };
+    const grelha = new Map();
+    const contagem = tipos.map((tp) => tp.geos.map(() => 0));
 
     const rnd = aleatorio(4242);
     const q = new THREE.Quaternion();
@@ -1111,6 +1450,54 @@ export class Mundo {
             if (s > 1.2) this.colisoes.circulo(x2, z2, s * 0.85, h2 + s * 0.6);
           }
         }
+        // vegetação rasteira: arbustos, fetos, troncos caídos, cepos; juncos e nenúfares no pântano
+        const ponha = (ti, x3, z3, s, y = null, deitado = false) => {
+          const h3 = y ?? altura(x3, z3);
+          e.set(deitado ? 0 : (rnd() - 0.5) * 0.15, rnd() * Math.PI * 2, deitado ? 0 : (rnd() - 0.5) * 0.15);
+          q.setFromEuler(e);
+          v.set(x3, h3, z3);
+          sc.set(s, s * (0.85 + rnd() * 0.3), s);
+          juntar(ti, Math.floor(rnd() * tipos[ti].geos.length), x3, z3, new THREE.Matrix4().compose(v, q, sc));
+        };
+        const montanha = h > 60 || mont > 0.3;
+        if (!montanha && dec < 0.35) {
+          const floresta = flor > 0.05;
+          const nArb = (pant > 0.4 ? 0.15 : floresta ? 1.1 : 0.35) * densMult;
+          for (let k = 0; k < 3; k++) {
+            if (rnd() > nArb / 3) continue;
+            const x3 = gx + rnd() * passo, z3 = gz + rnd() * passo;
+            if (altura(x3, z3) < 0.3 || !this.podeCrescer(x3, z3, 3)) continue;
+            ponha(secoRapido(x3, z3) > 0.15 || reg?.id === 'cemiterio' ? 5 : 4, x3, z3, 0.8 + rnd() * 0.9);
+          }
+          const nFeto = (floresta ? 1.6 : 0.25) * densMult * (pant > 0.4 ? 0.3 : 1);
+          for (let k = 0; k < 4; k++) {
+            if (rnd() > nFeto / 4) continue;
+            const x3 = gx + rnd() * passo, z3 = gz + rnd() * passo;
+            if (altura(x3, z3) < 0.3 || !this.podeCrescer(x3, z3, 2.5)) continue;
+            ponha(6, x3, z3, 0.7 + rnd() * 0.6);
+          }
+          if (rnd() < (floresta ? 0.06 : 0.015) && this.podeCrescer(x, z, 4)) {
+            const x3 = gx + rnd() * passo, z3 = gz + rnd() * passo;
+            if (altura(x3, z3) > 0.3) {
+              if (rnd() < 0.55) {
+                ponha(7, x3, z3, 0.8 + rnd() * 0.4, altura(x3, z3) - 0.1, true);
+                this.colisoes.circulo(x3, z3, 0.6, altura(x3, z3) + 0.6);
+              } else {
+                ponha(8, x3, z3, 0.8 + rnd() * 0.5);
+                this.colisoes.circulo(x3, z3, 0.5, altura(x3, z3) + 0.8);
+              }
+            }
+          }
+        }
+        if (pant > 0.3) {
+          for (let k = 0; k < 6; k++) {
+            const x3 = gx + rnd() * passo, z3 = gz + rnd() * passo;
+            const h3 = altura(x3, z3);
+            if (!this.podeCrescer(x3, z3, 2)) continue;
+            if (h3 > -0.7 && h3 < 0.5 && rnd() < 0.6) ponha(9, x3, z3, 0.8 + rnd() * 0.6, Math.min(h3, 0.1));
+            else if (h3 < -0.25 && rnd() < 0.35) ponha(10, x3, z3, 0.6 + rnd() * 0.7, 0.03, true);
+          }
+        }
       }
     }
 
@@ -1119,9 +1506,11 @@ export class Mundo {
       porTipo.forEach((porVar, ti) => {
         porVar.forEach((mats, vi) => {
           if (!mats.length) return;
-          const im = new THREE.InstancedMesh(tipos[ti].geos[vi], tipos[ti].mat, mats.length);
+          const tp = tipos[ti];
+          const im = new THREE.InstancedMesh(tp.lod ? tp.lod[vi] : tp.geos[vi], tp.lod ? tp.matLonge : tp.mat, mats.length);
           mats.forEach((m, i) => im.setMatrixAt(i, m));
-          im.castShadow = true;
+          im.userData.perto = tp.perto || 0;
+          im.userData.semSombra = !!tp.lod || (tp.perto && ti !== 7 && ti !== 8);
           im.receiveShadow = true;
           im.computeBoundingSphere();
           this.cena.add(im);
@@ -1130,6 +1519,55 @@ export class Mundo {
       });
     }
     this.numArvores = arvores;
+
+    // árvores detalhadas à volta do jogador (atualizadas quando ele se desloca)
+    this.grelhaArvores = grelha;
+    this.arvoresPerto = [];
+    tipos.forEach((tp, ti) => {
+      if (!tp.lod) return;
+      tp.geos.forEach((geo, vi) => {
+        const cap = Math.max(1, Math.min(contagem[ti][vi], 1200));
+        const im = new THREE.InstancedMesh(geo, tp.mat, cap);
+        im.count = 0;
+        im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        im.castShadow = true;
+        im.receiveShadow = true;
+        this.cena.add(im);
+        this.arvoresPerto.push({ ti, vi, im, cap });
+      });
+    });
+    this.centroArvores = new THREE.Vector2(1e9, 1e9);
+  }
+
+  atualizarArvoresPerto(foco) {
+    if (!this.arvoresPerto) return;
+    if (Math.hypot(foco.x - this.centroArvores.x, foco.z - this.centroArvores.y) < 6) return;
+    this.centroArvores.set(foco.x, foco.z);
+    const R = this.raioArvores;
+    const porChave = new Map();
+    for (const a of this.arvoresPerto) {
+      a.im.count = 0;
+      porChave.set(`${a.ti},${a.vi}`, a);
+    }
+    const c0 = Math.floor((foco.x - R) / 25), c1 = Math.floor((foco.x + R) / 25);
+    const r0 = Math.floor((foco.z - R) / 25), r1 = Math.floor((foco.z + R) / 25);
+    for (let i = c0; i <= c1; i++) {
+      for (let j = r0; j <= r1; j++) {
+        const l = this.grelhaArvores.get(`${i},${j}`);
+        if (!l) continue;
+        for (const t of l) {
+          if (Math.hypot(t.x - foco.x, t.z - foco.z) >= R) continue;
+          const a = porChave.get(`${t.tipo},${t.variante}`);
+          if (a.im.count >= a.cap) continue;
+          a.im.setMatrixAt(a.im.count++, t.m);
+        }
+      }
+    }
+    for (const a of this.arvoresPerto) {
+      a.im.instanceMatrix.needsUpdate = true;
+      a.im.computeBoundingSphere();
+    }
+    this.uPerto.value.set(foco.x, foco.z, R);
   }
 
   // ---------- relva junto ao jogador ----------
@@ -1376,16 +1814,19 @@ export class Mundo {
     }
     if (this.portaNevoeiro) this.portaNevoeiro.mesh.material.uniforms.uTempo.value = this.tempo;
     this.atualizarSombras(foco);
+    this.atualizarArvoresPerto(foco);
 
     // vegetação: blocos distantes ficam escondidos (o nevoeiro já os apaga) e só os próximos fazem sombra
     if (this.blocosVeg) {
       const cp = camara.position;
-      const alcance = { baixa: 250, media: 330, alta: 470 }[this.qualidade];
+      const k = this.distDetalhe;
+      const alcance = { baixa: 250, media: 330, alta: 470 }[this.qualidade] * Math.min(1.25, 0.6 + 0.4 * k);
+      this.uFolhas.value = this.tempo;
       for (const b of this.blocosVeg) {
         const bs = b.boundingSphere;
         const d = Math.hypot(bs.center.x - cp.x, bs.center.z - cp.z) - bs.radius;
-        b.visible = d < alcance;
-        b.castShadow = Math.hypot(bs.center.x - foco.x, bs.center.z - foco.z) - bs.radius < 70;
+        b.visible = d < (b.userData.perto ? Math.min(alcance, b.userData.perto * k) : alcance);
+        b.castShadow = !b.userData.semSombra && Math.hypot(bs.center.x - foco.x, bs.center.z - foco.z) - bs.radius < 70 * k;
       }
     }
 

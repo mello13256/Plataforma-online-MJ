@@ -36,7 +36,7 @@ function escrever(chave, v) {
 
 // ------------------------------------------------------------------ opções e renderizador
 const toque = matchMedia('(pointer: coarse)').matches;
-const opcoes = Object.assign({ qualidade: toque ? 'baixa' : 'media', sens: 1, volume: 0.8, inverter: false, fps: false, camara: 'primeira' }, ler(CHAVE_OP) || {});
+const opcoes = Object.assign({ qualidade: toque ? 'baixa' : 'media', sens: 1, volume: 0.8, inverter: false, fps: false, camara: 'primeira', detalhe: 1 }, ler(CHAVE_OP) || {});
 const emPrimeiraPessoa = () => opcoes.camara === 'primeira';
 const Q = opcoes.qualidade;
 
@@ -246,6 +246,7 @@ async function arrancar() {
   jogador = new Jogador(ctx, M);
   carregar(0.8, 'A forjar as manoplas…');
   await quadro();
+  mundo.definirDistanciaDetalhe(opcoes.detalhe);
   pp = new PrimeiraPessoa(mundo, Q);
   pp.definirArma(jogador.arma);
   if (passoBracos) {
@@ -1125,6 +1126,11 @@ function prepararOpcoes() {
   $('op-inverter').checked = opcoes.inverter;
   $('op-fps').checked = opcoes.fps;
   $('op-camara').value = opcoes.camara;
+  $('op-detalhe').value = opcoes.detalhe;
+  $('val-detalhe').textContent = rotuloDetalhe(opcoes.detalhe);
+}
+function rotuloDetalhe(k) {
+  return k < 0.75 ? 'Curta (mais FPS)' : k < 1.05 ? 'Normal' : k < 1.35 ? 'Longa' : 'Muito longa';
 }
 
 function ligarMenus() {
@@ -1179,6 +1185,12 @@ function ligarMenus() {
   $('op-inverter').onchange = (e) => {
     opcoes.inverter = e.target.checked;
     entrada.inverterY = opcoes.inverter;
+    escrever(CHAVE_OP, opcoes);
+  };
+  $('op-detalhe').oninput = (e) => {
+    opcoes.detalhe = +e.target.value;
+    $('val-detalhe').textContent = rotuloDetalhe(opcoes.detalhe);
+    if (mundo) mundo.definirDistanciaDetalhe(opcoes.detalhe);
     escrever(CHAVE_OP, opcoes);
   };
   $('op-camara').onchange = (e) => {
@@ -1359,9 +1371,10 @@ function passo(dt) {
   for (const ini of inimigos) {
     if (!ini.ativo) continue;
     const d = Math.hypot(ini.pos.x - jogador.pos.x, ini.pos.z - jogador.pos.z);
-    const visivel = d < (ini.chefe ? 220 : 110);
+    const kd = opcoes.detalhe;
+    const visivel = d < (ini.chefe ? 220 : 110 * Math.min(1.3, kd));
     ini.rig.raiz.visible = visivel;
-    const sombra = d < 45;
+    const sombra = d < 45 * kd;
     if (ini.comSombra !== sombra) {
       ini.comSombra = sombra;
       for (const m of ini.materiais) m.castShadow = sombra;
