@@ -774,7 +774,10 @@ local function entrou(plr)
 	end
 	sincronizar(est)
 	plr.CharacterAdded:Connect(function(personagem)
-		prepararPersonagem(est, personagem)
+		local ok, erro = pcall(prepararPersonagem, est, personagem)
+		if not ok then
+			warn("[Céu Partido] erro ao preparar a personagem:", erro)
+		end
 	end)
 	plr:LoadCharacter()
 end
@@ -840,9 +843,18 @@ function Jogadores.iniciar(contexto)
 		end
 	end)
 
-	Players.PlayerAdded:Connect(entrou)
+	local function entrarSeguro(plr)
+		local ok, erro = pcall(entrou, plr)
+		if not ok then
+			warn("[Céu Partido] erro ao entrar:", erro)
+			if plr.Parent and not plr.Character then
+				plr:LoadCharacter()
+			end
+		end
+	end
+	Players.PlayerAdded:Connect(entrarSeguro)
 	for _, plr in Players:GetPlayers() do
-		task.spawn(entrou, plr)
+		task.spawn(entrarSeguro, plr)
 	end
 	Players.PlayerRemoving:Connect(function(plr)
 		local est = estados[plr]

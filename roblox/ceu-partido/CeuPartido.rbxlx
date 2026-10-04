@@ -2320,7 +2320,10 @@ local function entrou(plr)
 	end
 	sincronizar(est)
 	plr.CharacterAdded:Connect(function(personagem)
-		prepararPersonagem(est, personagem)
+		local ok, erro = pcall(prepararPersonagem, est, personagem)
+		if not ok then
+			warn("[Céu Partido] erro ao preparar a personagem:", erro)
+		end
 	end)
 	plr:LoadCharacter()
 end
@@ -2386,9 +2389,18 @@ function Jogadores.iniciar(contexto)
 		end
 	end)
 
-	Players.PlayerAdded:Connect(entrou)
+	local function entrarSeguro(plr)
+		local ok, erro = pcall(entrou, plr)
+		if not ok then
+			warn("[Céu Partido] erro ao entrar:", erro)
+			if plr.Parent and not plr.Character then
+				plr:LoadCharacter()
+			end
+		end
+	end
+	Players.PlayerAdded:Connect(entrarSeguro)
 	for _, plr in Players:GetPlayers() do
-		task.spawn(entrou, plr)
+		task.spawn(entrarSeguro, plr)
 	end
 	Players.PlayerRemoving:Connect(function(plr)
 		local est = estados[plr]
@@ -2420,7 +2432,6 @@ return Jogadores
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local StarterGui = game:GetService("StarterGui")
 
 Players.CharacterAutoLoads = false
 
@@ -2436,29 +2447,48 @@ for _, nome in nomes do
 	R[nome] = r
 end
 
-local Mundo = require(script.Parent:WaitForChild("Mundo"))
-local Jogadores = require(script.Parent:WaitForChild("Jogadores"))
-local Inimigos = require(script.Parent:WaitForChild("Inimigos"))
+-- cada passo é protegido: um erro fica registado na janela Output, mas o jogo arranca na mesma
+local function passo(nome: string, fn: () -> ())
+	local ok, erro = pcall(fn :: any)
+	if not ok then
+		warn("[Céu Partido] falhou «" .. nome .. "»:", erro)
+		ReplicatedStorage:SetAttribute("ErroServidor", nome .. ": " .. tostring(erro))
+	end
+end
+
+local Mundo, Jogadores, Inimigos
+passo("carregar módulos", function()
+	Mundo = require(script.Parent:WaitForChild("Mundo")) :: any
+	Jogadores = require(script.Parent:WaitForChild("Jogadores")) :: any
+	Inimigos = require(script.Parent:WaitForChild("Inimigos")) :: any
+end)
 
 local inicio = os.clock()
-Mundo.gerar()
+passo("gerar o mundo", function()
+	Mundo.gerar()
+end)
 print(string.format("[Céu Partido] mundo gerado em %.1f s", os.clock() - inicio))
 
 local ctx = { remotos = R, jogadores = Jogadores, inimigos = Inimigos, mundo = Mundo }
-Inimigos.iniciar(ctx)
+passo("criar inimigos", function()
+	Inimigos.iniciar(ctx)
+end)
 remotos.Parent = ReplicatedStorage
-Jogadores.iniciar(ctx)
+passo("preparar jogadores", function()
+	Jogadores.iniciar(ctx)
+end)
 
 -- o mundo está pronto: os clientes podem começar
 ReplicatedStorage:SetAttribute("MundoPronto", true)
 
 RunService.Heartbeat:Connect(function(dt)
-	Jogadores.atualizar(dt)
-	Inimigos.atualizar(dt)
+	if Jogadores then
+		Jogadores.atualizar(dt)
+	end
+	if Inimigos then
+		Inimigos.atualizar(dt)
+	end
 end)
-
--- a interface padrão de mochila e lista de jogadores não é usada neste jogo
-StarterGui.ResetPlayerGuiOnSpawn = false
 ]]></string>
         </Properties>
       </Item>
@@ -3090,12 +3120,17 @@ end
 
 -- ---------------------------------------------------------------- geração completa
 
+local function etapa(nome: string, fn: () -> ())
+	local ok, erro = pcall(fn :: any)
+	if not ok then
+		warn("[Céu Partido] erro ao gerar «" .. nome .. "»:", erro)
+	end
+end
+
 function Mundo.gerar()
 	pasta = Instance.new("Folder")
 	pasta.Name = "Mundo"
 	pasta.Parent = workspace
-	workspace.FallenPartsDestroyHeight = -500
-	terreno.Decoration = true
 	terreno.WaterColor = Color3.fromRGB(70, 150, 170)
 	terreno.WaterTransparency = 0.6
 	terreno.WaterWaveSize = 0.08
@@ -3103,11 +3138,13 @@ function Mundo.gerar()
 	terreno:SetMaterialColor(Enum.Material.LeafyGrass, Color3.fromRGB(120, 160, 86))
 	terreno:SetMaterialColor(Enum.Material.Ground, Color3.fromRGB(110, 92, 72))
 
-	ambiente()
+	etapa("ambiente", ambiente)
 	for _, ilha in Config.ILHAS do
-		gerarIlha(ilha)
+		etapa("ilha " .. ilha.id, function()
+			gerarIlha(ilha)
+		end)
 	end
-	gerarRochasFlutuantes()
+	etapa("rochas", gerarRochasFlutuantes)
 
 	-- ponto de exclusão para vegetação
 	local livres: { { p: Vector3, r: number } } = {}
@@ -3135,74 +3172,80 @@ function Mundo.gerar()
 	estruturas.Name = "Estruturas"
 	estruturas.Parent = pasta
 
-	-- pontes
-	for _, par in Config.PONTES do
-		local a, b = ilhasPorId[par[1]], ilhasPorId[par[2]]
-		if a and b then
-			local p0, p1 = ponte(a, b, estruturas)
-			excluir(p0, 16)
-			excluir(p1, 16)
+	etapa("pontes", function()
+		-- pontes
+		for _, par in Config.PONTES do
+			local a, b = ilhasPorId[par[1]], ilhasPorId[par[2]]
+			if a and b then
+				local p0, p1 = ponte(a, b, estruturas)
+				excluir(p0, 16)
+				excluir(p1, 16)
+			end
 		end
-	end
+	end)
 
-	-- ruínas por ilha
-	local rnd = Random.new(1234)
-	-- círculo de menires no Despertar
-	for i = 0, 7 do
-		local a = i / 8 * math.pi * 2
-		local p = Mundo.chaoOuIlha(-60 + math.cos(a) * 18, 10 + math.sin(a) * 18)
-		local h = rnd:NextNumber(7, 12)
-		parte({ Size = Vector3.new(3.4, h, 2.2), Material = Enum.Material.Slate, Color = Color3.fromRGB(120, 126, 134),
-			CFrame = CFrame.new(p + Vector3.new(0, h / 2 - 1, 0)) * CFrame.Angles(rnd:NextNumber(-0.08, 0.08), -a, rnd:NextNumber(-0.08, 0.08)) }, estruturas)
-	end
-	excluir(Vector3.new(-60, 0, 10), 22)
-	-- colunatas dos Jardins
-	for i = 0, 9 do
-		local p = Mundo.chaoOuIlha(300 + (i % 5) * 14, -95 + math.floor(i / 5) * 40)
-		pilar(p, 16, i % 3 == 1, rnd, estruturas)
-	end
-	local arco = Mundo.chaoOuIlha(355, -75)
-	parte({ Size = Vector3.new(62, 2.4, 6), Material = Enum.Material.Marble, Color = PEDRA, CFrame = CFrame.new(arco + Vector3.new(-27, 19, -20)) }, estruturas)
-	excluir(Vector3.new(328, 0, -75), 38)
-	-- observatório: muro circular da arena e telescópio caído
-	local ag = Config.ARENAS.guardiao
-	anelMuro(ag.centro, ag.raio, 18, ag.normal, 18, Enum.Material.Marble, PEDRA, estruturas)
-	local tel = Mundo.chaoOuIlha(80, -560)
-	parte({ Size = Vector3.new(40, 7, 7), Shape = Enum.PartType.Cylinder, Material = Enum.Material.Metal, Color = Color3.fromRGB(150, 120, 80),
-		CFrame = CFrame.new(tel + Vector3.new(0, 8, 0)) * CFrame.Angles(0, math.rad(30), math.rad(25)) }, estruturas)
-	excluir(Vector3.new(80, 0, -560), 22)
-	-- olho da tempestade: anel de rochas negras
-	local at = Config.ARENAS.tempestor
-	anelMuro(at.centro, at.raio, 22, at.normal, 18, Enum.Material.Basalt, Color3.fromRGB(60, 60, 70), estruturas)
+	etapa("ruínas", function()
+		-- ruínas por ilha
+		local rnd = Random.new(1234)
+		-- círculo de menires no Despertar
+		for i = 0, 7 do
+			local a = i / 8 * math.pi * 2
+			local p = Mundo.chaoOuIlha(-60 + math.cos(a) * 18, 10 + math.sin(a) * 18)
+			local h = rnd:NextNumber(7, 12)
+			parte({ Size = Vector3.new(3.4, h, 2.2), Material = Enum.Material.Slate, Color = Color3.fromRGB(120, 126, 134),
+				CFrame = CFrame.new(p + Vector3.new(0, h / 2 - 1, 0)) * CFrame.Angles(rnd:NextNumber(-0.08, 0.08), -a, rnd:NextNumber(-0.08, 0.08)) }, estruturas)
+		end
+		excluir(Vector3.new(-60, 0, 10), 22)
+		-- colunatas dos Jardins
+		for i = 0, 9 do
+			local p = Mundo.chaoOuIlha(300 + (i % 5) * 14, -95 + math.floor(i / 5) * 40)
+			pilar(p, 16, i % 3 == 1, rnd, estruturas)
+		end
+		local arco = Mundo.chaoOuIlha(355, -75)
+		parte({ Size = Vector3.new(62, 2.4, 6), Material = Enum.Material.Marble, Color = PEDRA, CFrame = CFrame.new(arco + Vector3.new(-27, 19, -20)) }, estruturas)
+		excluir(Vector3.new(328, 0, -75), 38)
+		-- observatório: muro circular da arena e telescópio caído
+		local ag = Config.ARENAS.guardiao
+		anelMuro(ag.centro, ag.raio, 18, ag.normal, 18, Enum.Material.Marble, PEDRA, estruturas)
+		local tel = Mundo.chaoOuIlha(80, -560)
+		parte({ Size = Vector3.new(40, 7, 7), Shape = Enum.PartType.Cylinder, Material = Enum.Material.Metal, Color = Color3.fromRGB(150, 120, 80),
+			CFrame = CFrame.new(tel + Vector3.new(0, 8, 0)) * CFrame.Angles(0, math.rad(30), math.rad(25)) }, estruturas)
+		excluir(Vector3.new(80, 0, -560), 22)
+		-- olho da tempestade: anel de rochas negras
+		local at = Config.ARENAS.tempestor
+		anelMuro(at.centro, at.raio, 22, at.normal, 18, Enum.Material.Basalt, Color3.fromRGB(60, 60, 70), estruturas)
+	end)
 
-	-- vegetação
-	local veg = Instance.new("Folder")
-	veg.Name = "Vegetacao"
-	veg.Parent = pasta
-	for _, ilha in Config.ILHAS do
-		local r2 = Random.new(semente(ilha.id .. "veg"))
-		local colocadas = 0
-		local tentativas = 0
-		while colocadas < ilha.arvores and tentativas < ilha.arvores * 12 do
-			tentativas += 1
-			local a = r2:NextNumber(0, math.pi * 2)
-			local d = math.sqrt(r2:NextNumber()) * ilha.raio * 0.85
-			local x = ilha.centro.X + math.cos(a) * d
-			local z = ilha.centro.Z + math.sin(a) * d
-			local ok = true
-			for _, e in livres do
-				if (Vector2.new(x, z) - Vector2.new(e.p.X, e.p.Z)).Magnitude < e.r then
-					ok = false
-					break
+	etapa("vegetação", function()
+		-- vegetação
+		local veg = Instance.new("Folder")
+		veg.Name = "Vegetacao"
+		veg.Parent = pasta
+		for _, ilha in Config.ILHAS do
+			local r2 = Random.new(semente(ilha.id .. "veg"))
+			local colocadas = 0
+			local tentativas = 0
+			while colocadas < ilha.arvores and tentativas < ilha.arvores * 12 do
+				tentativas += 1
+				local a = r2:NextNumber(0, math.pi * 2)
+				local d = math.sqrt(r2:NextNumber()) * ilha.raio * 0.85
+				local x = ilha.centro.X + math.cos(a) * d
+				local z = ilha.centro.Z + math.sin(a) * d
+				local ok = true
+				for _, e in livres do
+					if (Vector2.new(x, z) - Vector2.new(e.p.X, e.p.Z)).Magnitude < e.r then
+						ok = false
+						break
+					end
+				end
+				local chao = if ok then Mundo.chao(x, z) else nil
+				if chao and math.abs(chao.Y - ilha.centro.Y) < 14 then
+					arvore(ilha.tipoArvore, chao, r2, veg)
+					colocadas += 1
 				end
 			end
-			local chao = if ok then Mundo.chao(x, z) else nil
-			if chao and math.abs(chao.Y - ilha.centro.Y) < 14 then
-				arvore(ilha.tipoArvore, chao, r2, veg)
-				colocadas += 1
-			end
 		end
-	end
+	end)
 
 	-- correntes, faróis, relicários, inscrições, barreiras
 	local interativos = Instance.new("Folder")
@@ -3212,23 +3255,35 @@ function Mundo.gerar()
 	correntes.Name = "Correntes"
 	correntes.Parent = workspace
 	for _, c in Config.CORRENTES do
-		corrente(c, correntes)
+		etapa("corrente", function()
+			corrente(c, correntes)
+		end)
 	end
 	for _, f in Config.FAROIS do
-		farol(f, interativos)
+		etapa("farol " .. f.id, function()
+			farol(f, interativos)
+		end)
 	end
 	for _, r in Config.RELICARIOS do
-		relicario(r, interativos)
+		etapa("relicário " .. r.id, function()
+			relicario(r, interativos)
+		end)
 	end
 	for _, i in Config.INSCRICOES do
-		inscricao(i, interativos)
+		etapa("inscrição", function()
+			inscricao(i, interativos)
+		end)
 	end
 	for id, a in Config.ARENAS do
-		barreira(id, a, interativos)
+		etapa("barreira " .. id, function()
+			barreira(id, a, interativos)
+		end)
 	end
 	for _, ilha in Config.ILHAS do
 		if ilha.tempestade then
-			tempestade(ilha, estruturas)
+			etapa("tempestade", function()
+				tempestade(ilha, estruturas)
+			end)
 		end
 	end
 end
@@ -5379,7 +5434,9 @@ local function atualizar(dt)
 	-- mira
 	local alvo = estado.alvo
 	local raizA = alvo and alvo:FindFirstChild("UpperTorso")
-	el.mira.Adornee = raizA
+	if raizA then
+		el.mira.Adornee = raizA
+	end
 	el.mira.Enabled = raizA ~= nil
 
 	-- nome da ilha
@@ -5454,7 +5511,10 @@ function Hud.iniciar(est, remotos, controles)
 		end
 		if input.KeyCode == Enum.KeyCode.H then
 			if el.ajuda.Visible then
-				fecharTudo()
+				el.ajuda.Visible = false
+				if estado.menu and not (el.menuFarol.Visible or el.menuNivel.Visible or el.menuViajar.Visible or el.leitura.Visible) then
+					estado.menu = false
+				end
 			elseif not estado.menu then
 				abrir("ajuda")
 			end
@@ -5469,13 +5529,13 @@ function Hud.iniciar(est, remotos, controles)
 		end
 	end)
 	RunService.RenderStepped:Connect(atualizar)
-	-- mostra a ajuda na primeira entrada
+	-- mostra a ajuda na primeira entrada, sem bloquear os controlos (some sozinha ou com H)
 	task.delay(2, function()
 		if not estado.menu then
-			abrir("ajuda")
+			el.ajuda.Visible = true
 			task.delay(14, function()
-				if el.ajuda.Visible then
-					fecharTudo()
+				if el.ajuda.Visible and not estado.menu then
+					el.ajuda.Visible = false
 				end
 			end)
 		end
@@ -5520,8 +5580,9 @@ titulo.Text = "CÉU PARTIDO"
 titulo.Parent = fundo
 local sub = Instance.new("TextLabel")
 sub.BackgroundTransparency = 1
-sub.Size = UDim2.new(1, 0, 0, 30)
-sub.Position = UDim2.fromScale(0, 0.52)
+sub.Size = UDim2.new(1, -80, 0, 90)
+sub.TextWrapped = true
+sub.Position = UDim2.new(0, 40, 0.52, 0)
 sub.Font = Enum.Font.Garamond
 sub.TextSize = 24
 sub.TextColor3 = Color3.fromRGB(200, 205, 220)
@@ -5532,9 +5593,17 @@ pcall(function()
 	ReplicatedFirst:RemoveDefaultLoadingScreen()
 end)
 
-local pastaRemotos = ReplicatedStorage:WaitForChild("Remotos")
-while not ReplicatedStorage:GetAttribute("MundoPronto") do
-	task.wait(0.2)
+local inicioEspera = os.clock()
+local pastaRemotos = nil
+while not (pastaRemotos and ReplicatedStorage:GetAttribute("MundoPronto")) do
+	pastaRemotos = ReplicatedStorage:FindFirstChild("Remotos")
+	local erro = ReplicatedStorage:GetAttribute("ErroServidor")
+	if erro then
+		sub.Text = "Erro no servidor: " .. tostring(erro)
+	elseif os.clock() - inicioEspera > 25 then
+		sub.Text = "O servidor está a demorar. No Studio, abre View → Output e procura mensagens a vermelho."
+	end
+	task.wait(0.3)
 end
 local R = {}
 for _, r in pastaRemotos:GetChildren() do

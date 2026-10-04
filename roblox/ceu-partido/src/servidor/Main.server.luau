@@ -4,7 +4,6 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local StarterGui = game:GetService("StarterGui")
 
 Players.CharacterAutoLoads = false
 
@@ -20,26 +19,45 @@ for _, nome in nomes do
 	R[nome] = r
 end
 
-local Mundo = require(script.Parent:WaitForChild("Mundo"))
-local Jogadores = require(script.Parent:WaitForChild("Jogadores"))
-local Inimigos = require(script.Parent:WaitForChild("Inimigos"))
+-- cada passo é protegido: um erro fica registado na janela Output, mas o jogo arranca na mesma
+local function passo(nome: string, fn: () -> ())
+	local ok, erro = pcall(fn :: any)
+	if not ok then
+		warn("[Céu Partido] falhou «" .. nome .. "»:", erro)
+		ReplicatedStorage:SetAttribute("ErroServidor", nome .. ": " .. tostring(erro))
+	end
+end
+
+local Mundo, Jogadores, Inimigos
+passo("carregar módulos", function()
+	Mundo = require(script.Parent:WaitForChild("Mundo")) :: any
+	Jogadores = require(script.Parent:WaitForChild("Jogadores")) :: any
+	Inimigos = require(script.Parent:WaitForChild("Inimigos")) :: any
+end)
 
 local inicio = os.clock()
-Mundo.gerar()
+passo("gerar o mundo", function()
+	Mundo.gerar()
+end)
 print(string.format("[Céu Partido] mundo gerado em %.1f s", os.clock() - inicio))
 
 local ctx = { remotos = R, jogadores = Jogadores, inimigos = Inimigos, mundo = Mundo }
-Inimigos.iniciar(ctx)
+passo("criar inimigos", function()
+	Inimigos.iniciar(ctx)
+end)
 remotos.Parent = ReplicatedStorage
-Jogadores.iniciar(ctx)
+passo("preparar jogadores", function()
+	Jogadores.iniciar(ctx)
+end)
 
 -- o mundo está pronto: os clientes podem começar
 ReplicatedStorage:SetAttribute("MundoPronto", true)
 
 RunService.Heartbeat:Connect(function(dt)
-	Jogadores.atualizar(dt)
-	Inimigos.atualizar(dt)
+	if Jogadores then
+		Jogadores.atualizar(dt)
+	end
+	if Inimigos then
+		Inimigos.atualizar(dt)
+	end
 end)
-
--- a interface padrão de mochila e lista de jogadores não é usada neste jogo
-StarterGui.ResetPlayerGuiOnSpawn = false

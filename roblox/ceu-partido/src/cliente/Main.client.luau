@@ -29,8 +29,9 @@ titulo.Text = "CÉU PARTIDO"
 titulo.Parent = fundo
 local sub = Instance.new("TextLabel")
 sub.BackgroundTransparency = 1
-sub.Size = UDim2.new(1, 0, 0, 30)
-sub.Position = UDim2.fromScale(0, 0.52)
+sub.Size = UDim2.new(1, -80, 0, 90)
+sub.TextWrapped = true
+sub.Position = UDim2.new(0, 40, 0.52, 0)
 sub.Font = Enum.Font.Garamond
 sub.TextSize = 24
 sub.TextColor3 = Color3.fromRGB(200, 205, 220)
@@ -41,9 +42,17 @@ pcall(function()
 	ReplicatedFirst:RemoveDefaultLoadingScreen()
 end)
 
-local pastaRemotos = ReplicatedStorage:WaitForChild("Remotos")
-while not ReplicatedStorage:GetAttribute("MundoPronto") do
-	task.wait(0.2)
+local inicioEspera = os.clock()
+local pastaRemotos = nil
+while not (pastaRemotos and ReplicatedStorage:GetAttribute("MundoPronto")) do
+	pastaRemotos = ReplicatedStorage:FindFirstChild("Remotos")
+	local erro = ReplicatedStorage:GetAttribute("ErroServidor")
+	if erro then
+		sub.Text = "Erro no servidor: " .. tostring(erro)
+	elseif os.clock() - inicioEspera > 25 then
+		sub.Text = "O servidor está a demorar. No Studio, abre View → Output e procura mensagens a vermelho."
+	end
+	task.wait(0.3)
 end
 local R = {}
 for _, r in pastaRemotos:GetChildren() do

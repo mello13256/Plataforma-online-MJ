@@ -515,7 +515,9 @@ local function atualizar(dt)
 	-- mira
 	local alvo = estado.alvo
 	local raizA = alvo and alvo:FindFirstChild("UpperTorso")
-	el.mira.Adornee = raizA
+	if raizA then
+		el.mira.Adornee = raizA
+	end
 	el.mira.Enabled = raizA ~= nil
 
 	-- nome da ilha
@@ -590,7 +592,10 @@ function Hud.iniciar(est, remotos, controles)
 		end
 		if input.KeyCode == Enum.KeyCode.H then
 			if el.ajuda.Visible then
-				fecharTudo()
+				el.ajuda.Visible = false
+				if estado.menu and not (el.menuFarol.Visible or el.menuNivel.Visible or el.menuViajar.Visible or el.leitura.Visible) then
+					estado.menu = false
+				end
 			elseif not estado.menu then
 				abrir("ajuda")
 			end
@@ -605,13 +610,13 @@ function Hud.iniciar(est, remotos, controles)
 		end
 	end)
 	RunService.RenderStepped:Connect(atualizar)
-	-- mostra a ajuda na primeira entrada
+	-- mostra a ajuda na primeira entrada, sem bloquear os controlos (some sozinha ou com H)
 	task.delay(2, function()
 		if not estado.menu then
-			abrir("ajuda")
+			el.ajuda.Visible = true
 			task.delay(14, function()
-				if el.ajuda.Visible then
-					fecharTudo()
+				if el.ajuda.Visible and not estado.menu then
+					el.ajuda.Visible = false
 				end
 			end)
 		end

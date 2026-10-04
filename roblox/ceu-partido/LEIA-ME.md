@@ -8,6 +8,9 @@ RPG de ação souls-like, cooperativo até 4 jogadores, passado num arquipélago
 2. Carrega em **Play** (F5). O servidor demora alguns segundos a erguer as ilhas (aparece «A erguer as ilhas…»).
 3. Para testar o cooperativo: separador **Test → Clients and Servers**, escolhe 2 a 4 jogadores e carrega em **Start**.
 4. Se algo falhar, a janela **Output** (*View → Output*) mostra o erro. Envia-o para o corrigirmos.
+   Se o servidor tiver um problema, o ecrã de espera também mostra a mensagem de erro em vez de ficar parado.
+5. Opcional: para relva 3D no terreno, seleciona **Workspace → Terrain** e ativa **Decoration** nas propriedades
+   (os scripts não podem ligar esta opção).
 
 ## Publicar
 

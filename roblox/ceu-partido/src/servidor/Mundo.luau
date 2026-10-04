@@ -623,12 +623,17 @@ end
 
 -- ---------------------------------------------------------------- geração completa
 
+local function etapa(nome: string, fn: () -> ())
+	local ok, erro = pcall(fn :: any)
+	if not ok then
+		warn("[Céu Partido] erro ao gerar «" .. nome .. "»:", erro)
+	end
+end
+
 function Mundo.gerar()
 	pasta = Instance.new("Folder")
 	pasta.Name = "Mundo"
 	pasta.Parent = workspace
-	workspace.FallenPartsDestroyHeight = -500
-	terreno.Decoration = true
 	terreno.WaterColor = Color3.fromRGB(70, 150, 170)
 	terreno.WaterTransparency = 0.6
 	terreno.WaterWaveSize = 0.08
@@ -636,11 +641,13 @@ function Mundo.gerar()
 	terreno:SetMaterialColor(Enum.Material.LeafyGrass, Color3.fromRGB(120, 160, 86))
 	terreno:SetMaterialColor(Enum.Material.Ground, Color3.fromRGB(110, 92, 72))
 
-	ambiente()
+	etapa("ambiente", ambiente)
 	for _, ilha in Config.ILHAS do
-		gerarIlha(ilha)
+		etapa("ilha " .. ilha.id, function()
+			gerarIlha(ilha)
+		end)
 	end
-	gerarRochasFlutuantes()
+	etapa("rochas", gerarRochasFlutuantes)
 
 	-- ponto de exclusão para vegetação
 	local livres: { { p: Vector3, r: number } } = {}
@@ -668,74 +675,80 @@ function Mundo.gerar()
 	estruturas.Name = "Estruturas"
 	estruturas.Parent = pasta
 
-	-- pontes
-	for _, par in Config.PONTES do
-		local a, b = ilhasPorId[par[1]], ilhasPorId[par[2]]
-		if a and b then
-			local p0, p1 = ponte(a, b, estruturas)
-			excluir(p0, 16)
-			excluir(p1, 16)
+	etapa("pontes", function()
+		-- pontes
+		for _, par in Config.PONTES do
+			local a, b = ilhasPorId[par[1]], ilhasPorId[par[2]]
+			if a and b then
+				local p0, p1 = ponte(a, b, estruturas)
+				excluir(p0, 16)
+				excluir(p1, 16)
+			end
 		end
-	end
+	end)
 
-	-- ruínas por ilha
-	local rnd = Random.new(1234)
-	-- círculo de menires no Despertar
-	for i = 0, 7 do
-		local a = i / 8 * math.pi * 2
-		local p = Mundo.chaoOuIlha(-60 + math.cos(a) * 18, 10 + math.sin(a) * 18)
-		local h = rnd:NextNumber(7, 12)
-		parte({ Size = Vector3.new(3.4, h, 2.2), Material = Enum.Material.Slate, Color = Color3.fromRGB(120, 126, 134),
-			CFrame = CFrame.new(p + Vector3.new(0, h / 2 - 1, 0)) * CFrame.Angles(rnd:NextNumber(-0.08, 0.08), -a, rnd:NextNumber(-0.08, 0.08)) }, estruturas)
-	end
-	excluir(Vector3.new(-60, 0, 10), 22)
-	-- colunatas dos Jardins
-	for i = 0, 9 do
-		local p = Mundo.chaoOuIlha(300 + (i % 5) * 14, -95 + math.floor(i / 5) * 40)
-		pilar(p, 16, i % 3 == 1, rnd, estruturas)
-	end
-	local arco = Mundo.chaoOuIlha(355, -75)
-	parte({ Size = Vector3.new(62, 2.4, 6), Material = Enum.Material.Marble, Color = PEDRA, CFrame = CFrame.new(arco + Vector3.new(-27, 19, -20)) }, estruturas)
-	excluir(Vector3.new(328, 0, -75), 38)
-	-- observatório: muro circular da arena e telescópio caído
-	local ag = Config.ARENAS.guardiao
-	anelMuro(ag.centro, ag.raio, 18, ag.normal, 18, Enum.Material.Marble, PEDRA, estruturas)
-	local tel = Mundo.chaoOuIlha(80, -560)
-	parte({ Size = Vector3.new(40, 7, 7), Shape = Enum.PartType.Cylinder, Material = Enum.Material.Metal, Color = Color3.fromRGB(150, 120, 80),
-		CFrame = CFrame.new(tel + Vector3.new(0, 8, 0)) * CFrame.Angles(0, math.rad(30), math.rad(25)) }, estruturas)
-	excluir(Vector3.new(80, 0, -560), 22)
-	-- olho da tempestade: anel de rochas negras
-	local at = Config.ARENAS.tempestor
-	anelMuro(at.centro, at.raio, 22, at.normal, 18, Enum.Material.Basalt, Color3.fromRGB(60, 60, 70), estruturas)
+	etapa("ruínas", function()
+		-- ruínas por ilha
+		local rnd = Random.new(1234)
+		-- círculo de menires no Despertar
+		for i = 0, 7 do
+			local a = i / 8 * math.pi * 2
+			local p = Mundo.chaoOuIlha(-60 + math.cos(a) * 18, 10 + math.sin(a) * 18)
+			local h = rnd:NextNumber(7, 12)
+			parte({ Size = Vector3.new(3.4, h, 2.2), Material = Enum.Material.Slate, Color = Color3.fromRGB(120, 126, 134),
+				CFrame = CFrame.new(p + Vector3.new(0, h / 2 - 1, 0)) * CFrame.Angles(rnd:NextNumber(-0.08, 0.08), -a, rnd:NextNumber(-0.08, 0.08)) }, estruturas)
+		end
+		excluir(Vector3.new(-60, 0, 10), 22)
+		-- colunatas dos Jardins
+		for i = 0, 9 do
+			local p = Mundo.chaoOuIlha(300 + (i % 5) * 14, -95 + math.floor(i / 5) * 40)
+			pilar(p, 16, i % 3 == 1, rnd, estruturas)
+		end
+		local arco = Mundo.chaoOuIlha(355, -75)
+		parte({ Size = Vector3.new(62, 2.4, 6), Material = Enum.Material.Marble, Color = PEDRA, CFrame = CFrame.new(arco + Vector3.new(-27, 19, -20)) }, estruturas)
+		excluir(Vector3.new(328, 0, -75), 38)
+		-- observatório: muro circular da arena e telescópio caído
+		local ag = Config.ARENAS.guardiao
+		anelMuro(ag.centro, ag.raio, 18, ag.normal, 18, Enum.Material.Marble, PEDRA, estruturas)
+		local tel = Mundo.chaoOuIlha(80, -560)
+		parte({ Size = Vector3.new(40, 7, 7), Shape = Enum.PartType.Cylinder, Material = Enum.Material.Metal, Color = Color3.fromRGB(150, 120, 80),
+			CFrame = CFrame.new(tel + Vector3.new(0, 8, 0)) * CFrame.Angles(0, math.rad(30), math.rad(25)) }, estruturas)
+		excluir(Vector3.new(80, 0, -560), 22)
+		-- olho da tempestade: anel de rochas negras
+		local at = Config.ARENAS.tempestor
+		anelMuro(at.centro, at.raio, 22, at.normal, 18, Enum.Material.Basalt, Color3.fromRGB(60, 60, 70), estruturas)
+	end)
 
-	-- vegetação
-	local veg = Instance.new("Folder")
-	veg.Name = "Vegetacao"
-	veg.Parent = pasta
-	for _, ilha in Config.ILHAS do
-		local r2 = Random.new(semente(ilha.id .. "veg"))
-		local colocadas = 0
-		local tentativas = 0
-		while colocadas < ilha.arvores and tentativas < ilha.arvores * 12 do
-			tentativas += 1
-			local a = r2:NextNumber(0, math.pi * 2)
-			local d = math.sqrt(r2:NextNumber()) * ilha.raio * 0.85
-			local x = ilha.centro.X + math.cos(a) * d
-			local z = ilha.centro.Z + math.sin(a) * d
-			local ok = true
-			for _, e in livres do
-				if (Vector2.new(x, z) - Vector2.new(e.p.X, e.p.Z)).Magnitude < e.r then
-					ok = false
-					break
+	etapa("vegetação", function()
+		-- vegetação
+		local veg = Instance.new("Folder")
+		veg.Name = "Vegetacao"
+		veg.Parent = pasta
+		for _, ilha in Config.ILHAS do
+			local r2 = Random.new(semente(ilha.id .. "veg"))
+			local colocadas = 0
+			local tentativas = 0
+			while colocadas < ilha.arvores and tentativas < ilha.arvores * 12 do
+				tentativas += 1
+				local a = r2:NextNumber(0, math.pi * 2)
+				local d = math.sqrt(r2:NextNumber()) * ilha.raio * 0.85
+				local x = ilha.centro.X + math.cos(a) * d
+				local z = ilha.centro.Z + math.sin(a) * d
+				local ok = true
+				for _, e in livres do
+					if (Vector2.new(x, z) - Vector2.new(e.p.X, e.p.Z)).Magnitude < e.r then
+						ok = false
+						break
+					end
+				end
+				local chao = if ok then Mundo.chao(x, z) else nil
+				if chao and math.abs(chao.Y - ilha.centro.Y) < 14 then
+					arvore(ilha.tipoArvore, chao, r2, veg)
+					colocadas += 1
 				end
 			end
-			local chao = if ok then Mundo.chao(x, z) else nil
-			if chao and math.abs(chao.Y - ilha.centro.Y) < 14 then
-				arvore(ilha.tipoArvore, chao, r2, veg)
-				colocadas += 1
-			end
 		end
-	end
+	end)
 
 	-- correntes, faróis, relicários, inscrições, barreiras
 	local interativos = Instance.new("Folder")
@@ -745,23 +758,35 @@ function Mundo.gerar()
 	correntes.Name = "Correntes"
 	correntes.Parent = workspace
 	for _, c in Config.CORRENTES do
-		corrente(c, correntes)
+		etapa("corrente", function()
+			corrente(c, correntes)
+		end)
 	end
 	for _, f in Config.FAROIS do
-		farol(f, interativos)
+		etapa("farol " .. f.id, function()
+			farol(f, interativos)
+		end)
 	end
 	for _, r in Config.RELICARIOS do
-		relicario(r, interativos)
+		etapa("relicário " .. r.id, function()
+			relicario(r, interativos)
+		end)
 	end
 	for _, i in Config.INSCRICOES do
-		inscricao(i, interativos)
+		etapa("inscrição", function()
+			inscricao(i, interativos)
+		end)
 	end
 	for id, a in Config.ARENAS do
-		barreira(id, a, interativos)
+		etapa("barreira " .. id, function()
+			barreira(id, a, interativos)
+		end)
 	end
 	for _, ilha in Config.ILHAS do
 		if ilha.tempestade then
-			tempestade(ilha, estruturas)
+			etapa("tempestade", function()
+				tempestade(ilha, estruturas)
+			end)
 		end
 	end
 end
