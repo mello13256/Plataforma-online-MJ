@@ -114,6 +114,30 @@ describe('jogos', () => {
     await assertFails(setDoc(doc(bd, 'jogos/Maiusculas'), jogoBase()));
   });
 
+  it('pastas reservadas: só a conta dona publica o jogo dessa pasta', async () => {
+    const reservado = { caminho: 'jogos/cinzas-de-valdoria/index.html', capa: 'jogos/cinzas-de-valdoria/capa.png' };
+    // outras contas não o publicam, nem como pasta do GitHub nem por ligação para os mesmos ficheiros
+    await assertFails(setDoc(doc(como('joel'), 'jogos/copia'), jogoBase(reservado)));
+    await assertFails(setDoc(doc(como('joel'), 'jogos/copia2'), jogoBase({
+      tipo: 'ligacao', caminho: null, url_externo: 'https://plataforma-web-mj.web.app/jogos/cinzas-de-valdoria/index.html',
+    })));
+    await assertFails(setDoc(doc(como('joel'), 'jogos/copia3'), jogoBase({
+      tipo: 'ligacao', caminho: null, url_externo: 'https://mello13256.github.io/Plataforma-online-MJ/jogos/Cinzas-de-Valdoria/',
+    })));
+    // nem mudam um jogo seu para apontar para a pasta reservada
+    await assertFails(updateDoc(doc(como('joel'), 'jogos/publicado'), { ...reservado, atualizado_em: serverTimestamp() }));
+    // um administrador também não o publica em nome próprio
+    await ambiente.withSecurityRulesDisabled((c) => setDoc(doc(c.firestore(), 'autores/admin2'), perfil('Admin', 'admin2', { admin: true })));
+    await assertFails(setDoc(doc(como('admin2'), 'jogos/copia4'), jogoBase({ ...reservado, autor_uid: 'admin2' })));
+    // o dono publica-o e edita-o; as outras pastas continuam livres
+    await assertSucceeds(setDoc(doc(como(DONO), 'jogos/cinzas'), jogoBase({ ...reservado, autor_uid: DONO })));
+    await assertSucceeds(updateDoc(doc(como(DONO), 'jogos/cinzas'), { titulo: 'Cinzas de Valdoria', atualizado_em: serverTimestamp() }));
+    await assertSucceeds(setDoc(doc(como('joel'), 'jogos/outro'), jogoBase({ caminho: 'jogos/apanha-as-estrelas/index.html' })));
+    await assertSucceeds(setDoc(doc(como('joel'), 'jogos/link'), jogoBase({
+      tipo: 'ligacao', caminho: null, url_externo: 'https://itch.io/embed-upload/123',
+    })));
+  });
+
   it('edição e eliminação respeitam as permissões', async () => {
     const editar = (uid) => updateDoc(doc(como(uid), 'jogos/publicado'), { titulo: 'Novo', atualizado_em: serverTimestamp() });
     await assertSucceeds(editar('joel'));
