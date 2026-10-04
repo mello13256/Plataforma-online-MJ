@@ -94,6 +94,8 @@
   #ecra-vitoria h2 { color: #e8c870; text-shadow: 0 0 30px rgba(230, 180, 80, 0.6); }
   #ecra-vitoria p, #ecra-fogueira p { margin: 8px 0 0; font-size: 18px; color: #c8bca0; }
   #ecra-fogueira h2 { color: #f0c070; text-shadow: 0 0 26px rgba(255, 160, 60, 0.6); font-size: clamp(30px, 5vw, 64px); }
+  body.vinheta-css #vinheta { position: fixed; inset: 0; pointer-events: none; z-index: 1; background: radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.5) 100%); }
+  #perigo { position: fixed; inset: 0; pointer-events: none; z-index: 2; opacity: 0; background: radial-gradient(ellipse at center, transparent 40%, rgba(120,0,0,0.55) 100%); }
   #fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 30; transition: opacity 1s; }
 
   /* ---------- painéis / menus ---------- */
@@ -197,6 +199,8 @@
 <div id="ecra-morte" class="ecra-texto"><div class="faixa"><h2>MORRESTE</h2></div></div>
 <div id="ecra-vitoria" class="ecra-texto"><div class="faixa"><h2 id="vitoria-titulo">GRANDE INIMIGO ABATIDO</h2><p id="vitoria-sub"></p></div></div>
 <div id="ecra-fogueira" class="ecra-texto"><div class="faixa"><h2>FOGUEIRA ACESA</h2><p id="fogueira-nome"></p></div></div>
+<div id="vinheta"></div>
+<div id="perigo"></div>
 <div id="fade"></div>
 
 <div id="menu-fogueira" class="painel oculto">

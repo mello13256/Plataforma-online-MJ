@@ -16,6 +16,8 @@ const PASSO = MUNDO.tam / MUNDO.segmentos;
 const alturas = new Float32Array(N * N);
 const pesoCaminhoV = new Float32Array(N * N);
 const pesoPantanoV = new Float32Array(N * N);
+const decliveV = new Float32Array(N * N);
+const secoV = new Float32Array(N * N);
 
 // ---------------------------------------------------------------- funções do terreno
 
@@ -128,6 +130,8 @@ function amostraGrelha(arr, x, z) {
 
 export const pesoCaminho = (x, z) => amostraGrelha(pesoCaminhoV, x, z);
 export const pesoPantano = (x, z) => amostraGrelha(pesoPantanoV, x, z);
+const decliveRapido = (x, z) => amostraGrelha(decliveV, x, z);
+const secoRapido = (x, z) => amostraGrelha(secoV, x, z);
 
 export function declive(x, z) {
   const e = 1.5;
@@ -391,6 +395,11 @@ export class Mundo {
     g.setIndex(new THREE.BufferAttribute(ind, 1));
     g.computeVertexNormals();
     g.computeBoundingSphere();
+    const nrm = g.attributes.normal;
+    for (let k = 0; k < N * N; k++) {
+      decliveV[k] = 1 - nrm.getY(k);
+      secoV[k] = fbm(s4, pos[k * 3] * 0.02, pos[k * 3 + 2] * 0.02, 2);
+    }
 
     const tex = this.tex;
     const mat = new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 });
@@ -416,24 +425,30 @@ export class Mundo {
         .replace('#include <map_fragment>', `
           vec3 nM = normalize(vNorM);
           vec2 uvA = vPosM.xz * 0.28;
-          vec2 uvB = vPosM.xz * 0.037;
-          float macro = texture2D(tRocha, vPosM.xz * 0.0045).r;
+          // um único mapa de variação grande (antes eram dois)
+          vec4 macroT = texture2D(tRocha, vPosM.xz * 0.0045);
+          float macro = macroT.r;
           float macro2 = texture2D(tRelva, vPosM.xz * 0.011).g;
-          vec3 cRelva = texture2D(tRelva, uvA).rgb * (0.65 + 1.4 * texture2D(tRelva, uvB).g) * (0.75 + 0.6 * macro);
+          vec3 cRelva = texture2D(tRelva, uvA).rgb * (0.65 + 1.4 * texture2D(tRelva, vPosM.xz * 0.037).g) * (0.75 + 0.6 * macro);
           vec3 seca = vec3(0.32, 0.27, 0.16);
           cRelva = mix(cRelva, cRelva * seca * 4.0, smoothstep(0.35, 0.55, macro2) * 0.6);
-          vec3 cTerra = texture2D(tTerra, uvA * 0.8).rgb * (0.85 + 0.3 * macro);
-          vec3 cRocha = triRocha(vPosM, nM, 0.12) * (0.8 + 0.4 * macro);
-          vec3 cLama = texture2D(tLama, uvA * 0.7).rgb;
           float decl = 1.0 - nM.y;
           wR = smoothstep(0.2, 0.36, decl + (macro - 0.5) * 0.12);
           wT = smoothstep(0.1, 0.8, vPeso.x + (macro2 - 0.5) * 0.3);
           wL = vPeso.y * smoothstep(3.5, 0.5, vPosM.y);
-          float neve = smoothstep(105.0, 140.0, vPosM.y + macro * 30.0) * (1.0 - wR * 0.7);
           vec3 c = cRelva;
-          c = mix(c, cLama, wL);
-          c = mix(c, cTerra, wT);
-          c = mix(c, cRocha, wR);
+          // só se lê a textura quando o peso é relevante (poupa leituras na maior parte do ecrã)
+          if (wL > 0.01) c = mix(c, texture2D(tLama, uvA * 0.7).rgb, wL);
+          if (wT > 0.01) c = mix(c, texture2D(tTerra, uvA * 0.8).rgb * (0.85 + 0.3 * macro), wT);
+          if (wR > 0.01) {
+          #ifdef TERRENO_ALTA
+            vec3 cRocha = triRocha(vPosM, nM, 0.12);
+          #else
+            vec3 cRocha = texture2D(tRocha, (abs(nM.x) > abs(nM.z) ? vPosM.zy : vPosM.xy) * 0.12).rgb;
+          #endif
+            c = mix(c, cRocha * (0.8 + 0.4 * macro), wR);
+          }
+          float neve = smoothstep(105.0, 140.0, vPosM.y + macro * 30.0) * (1.0 - wR * 0.7);
           c = mix(c, vec3(0.55, 0.55, 0.57) * (0.85 + 0.3 * macro), neve);
           float molhado = smoothstep(0.6, -0.2, vPosM.y);
           c *= 1.0 - molhado * 0.45;
@@ -442,17 +457,22 @@ export class Mundo {
         .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
           roughnessFactor = mix(roughnessFactor, 0.35, molhado * 0.8);`)
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+          #ifdef TERRENO_NORMAIS
           {
-            vec3 tn = texture2D(tRelvaN, uvA).xyz * 2.0 - 1.0;
-            tn = mix(tn, texture2D(tTerraN, uvA * 0.8).xyz * 2.0 - 1.0, wT);
-            tn = mix(tn, texture2D(tRochaN, (abs(nM.x) > abs(nM.z) ? vPosM.zy : vPosM.xy) * 0.12).xyz * 2.0 - 1.0, wR);
+            vec3 tn;
+            if (wR > 0.5) tn = texture2D(tRochaN, (abs(nM.x) > abs(nM.z) ? vPosM.zy : vPosM.xy) * 0.12).xyz * 2.0 - 1.0;
+            else if (wT > 0.5) tn = texture2D(tTerraN, uvA * 0.8).xyz * 2.0 - 1.0;
+            else tn = texture2D(tRelvaN, uvA).xyz * 2.0 - 1.0;
             tn.xy *= 0.9;
             vec3 T = normalize(vec3(1.0, 0.0, 0.0) - nM * nM.x);
             vec3 B = normalize(vec3(0.0, 0.0, 1.0) - nM * nM.z);
             vec3 nW = normalize(T * tn.x + B * tn.y + nM * tn.z);
             normal = normalize((viewMatrix * vec4(nW, 0.0)).xyz);
-          }`);
+          }
+          #endif`);
     };
+    if (this.qualidade === 'alta') mat.defines = { TERRENO_ALTA: '', TERRENO_NORMAIS: '' };
+    else if (this.qualidade === 'media') mat.defines = { TERRENO_NORMAIS: '' };
     const terreno = new THREE.Mesh(g, mat);
     terreno.receiveShadow = true;
     this.cena.add(terreno);
@@ -479,8 +499,7 @@ export class Mundo {
     const azim = THREE.MathUtils.degToRad(-42);
     this.dirSol = new THREE.Vector3().setFromSphericalCoords(1, Math.PI / 2 - elev, azim);
     u.sunPosition.value.copy(this.dirSol);
-    this.cena.add(ceu);
-    this.ceu = ceu;
+    // o céu não é desenhado diretamente: é pré-renderizado abaixo para um cubo (muito mais barato)
 
     // Mapa de ambiente a partir do céu (reflexos e luz indireta realistas).
     const pm = new THREE.PMREMGenerator(this.renderer);
@@ -492,9 +511,18 @@ export class Mundo {
     for (const k of ['turbidity', 'rayleigh', 'mieCoefficient', 'mieDirectionalG']) ceu2.material.uniforms[k].value = u[k].value;
     cenaCeu.add(ceu2);
     const env = pm.fromScene(cenaCeu, 0.02).texture;
-    this.cena.environment = env;
-    this.cena.environmentIntensity = 0.55;
+    this.envMapa = env;
+    // a iluminação indireta por mapa de ambiente é cara em cada píxel: só na qualidade alta.
+    // Nas outras, uma luz hemisférica mais forte faz esse papel e só os metais usam o mapa (ver principal.js).
+    if (this.qualidade === 'alta') {
+      this.cena.environment = env;
+      this.cena.environmentIntensity = 0.55;
+    }
     pm.dispose();
+    const rtCeu = new THREE.WebGLCubeRenderTarget(this.qualidade === 'alta' ? 1024 : 512, { type: THREE.HalfFloatType, generateMipmaps: false });
+    const camCubo = new THREE.CubeCamera(1, 5000, rtCeu);
+    camCubo.update(this.renderer, cenaCeu);
+    this.cena.background = rtCeu.texture;
 
     this.cena.fog = new THREE.FogExp2(0x8b8478, 0.0029);
     this.corNevoeiroBase = new THREE.Color(0x8b8478);
@@ -504,10 +532,11 @@ export class Mundo {
     const sombras = this.qualidade !== 'baixa';
     sol.castShadow = sombras;
     if (sombras) {
-      const tam = this.qualidade === 'alta' ? 4096 : 2048;
+      const tam = this.qualidade === 'alta' ? 2048 : 1024;
       sol.shadow.mapSize.set(tam, tam);
       const c = sol.shadow.camera;
-      c.left = -55; c.right = 55; c.top = 55; c.bottom = -55; c.near = 10; c.far = 420;
+      const ext = this.qualidade === 'alta' ? 55 : 42;
+      c.left = -ext; c.right = ext; c.top = ext; c.bottom = -ext; c.near = 10; c.far = 420;
       sol.shadow.bias = -0.0004;
       sol.shadow.normalBias = 0.04;
     }
@@ -515,7 +544,7 @@ export class Mundo {
     this.cena.add(sol.target);
     this.sol = sol;
 
-    const hemi = new THREE.HemisphereLight(0x9aa6b8, 0x40362a, 0.35);
+    const hemi = new THREE.HemisphereLight(0x9aa6b8, 0x40362a, this.qualidade === 'alta' ? 0.35 : 1.25);
     this.cena.add(hemi);
 
     // A Árvore Áurea: marco gigante no horizonte, a norte.
@@ -1105,15 +1134,15 @@ export class Mundo {
 
   // ---------- relva junto ao jogador ----------
   gerarRelva() {
-    const qtd = { baixa: 6000, media: 16000, alta: 30000 }[this.qualidade];
-    const raio = { baixa: 32, media: 42, alta: 55 }[this.qualidade];
+    const qtd = { baixa: 3500, media: 9000, alta: 20000 }[this.qualidade];
+    const raio = { baixa: 28, media: 36, alta: 48 }[this.qualidade];
     this.raioRelva = raio;
     // tufo com várias lâminas
     const pos = [];
     const uvs = [];
     const nor = [];
     const rnd = aleatorio(17);
-    const laminas = 9;
+    const laminas = this.qualidade === 'alta' ? 9 : 7;
     for (let b = 0; b < laminas; b++) {
       const a = rnd() * Math.PI * 2;
       const ox = (rnd() - 0.5) * 0.5;
@@ -1196,6 +1225,9 @@ export class Mundo {
     const zero = new THREE.Matrix4().makeScale(0, 0, 0);
     const im = this.relva;
     const K = this.padraoRelva.length;
+    // só as zonas de exclusão perto deste centro (antes testava todas para cada lâmina)
+    const alcanceZ = this.raioRelva + T * 2;
+    const zonasPerto = this.excluirRelva.filter((zn) => Math.hypot(zn.x - (cx + 0.5) * T, zn.z - (cz + 0.5) * T) < alcanceZ + zn.r);
     let i = 0;
     for (const [di, dj] of this.ladrilhos) {
       const ti = cx + di;
@@ -1209,9 +1241,9 @@ export class Mundo {
         const h = altura(wx, wz);
         const pc = pesoCaminho(wx, wz);
         const pp = pesoPantano(wx, wz);
-        let ok = h > 0.25 && pc < 0.35 && h < 75 && declive(wx, wz) < 0.3;
+        let ok = h > 0.25 && pc < 0.35 && h < 75 && decliveRapido(wx, wz) < 0.3;
         if (ok) {
-          for (const zn of this.excluirRelva) {
+          for (const zn of zonasPerto) {
             if (Math.abs(wx - zn.x) < zn.r && Math.abs(wz - zn.z) < zn.r && Math.hypot(wx - zn.x, wz - zn.z) < zn.r) { ok = false; break; }
           }
         }
@@ -1219,7 +1251,7 @@ export class Mundo {
           im.setMatrixAt(i, zero);
           continue;
         }
-        const seco = fbm(s4, wx * 0.02, wz * 0.02, 2);
+        const seco = secoRapido(wx, wz);
         q.setFromAxisAngle(eixo, ((rr + h1) % 1) * 6.283);
         const e = esc * (1 - pc) * (pp > 0.3 ? 1.3 : 1) * (0.8 + 0.4 * (seco + 0.5));
         m.compose(v.set(wx, h - 0.03, wz), q, s.set(e, e * (0.8 + rr * 0.6), e));
@@ -1303,7 +1335,7 @@ export class Mundo {
 
   // ---------- poeira e cinzas no ar ----------
   gerarParticulas() {
-    const n = this.qualidade === 'baixa' ? 150 : 400;
+    const n = { baixa: 80, media: 180, alta: 350 }[this.qualidade];
     const g = new THREE.BufferGeometry();
     const p = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) {
@@ -1348,7 +1380,7 @@ export class Mundo {
     // vegetação: blocos distantes ficam escondidos (o nevoeiro já os apaga) e só os próximos fazem sombra
     if (this.blocosVeg) {
       const cp = camara.position;
-      const alcance = this.qualidade === 'alta' ? 520 : this.qualidade === 'media' ? 420 : 320;
+      const alcance = { baixa: 250, media: 330, alta: 470 }[this.qualidade];
       for (const b of this.blocosVeg) {
         const bs = b.boundingSphere;
         const d = Math.hypot(bs.center.x - cp.x, bs.center.z - cp.z) - bs.radius;
@@ -1391,8 +1423,8 @@ export class Mundo {
         let z = p.getZ(i) + Math.cos(this.tempo * 0.4 + i) * dt * 0.3;
         if (x - c.x > 30) x -= 60; if (x - c.x < -30) x += 60;
         if (z - c.z > 30) z -= 60; if (z - c.z < -30) z += 60;
-        const hb = altura(x, z);
-        if (y > hb + 18 || y < hb) y = hb + Math.random() * 3;
+        // referência pela câmara (antes calculava a altura do terreno para cada partícula em cada fotograma)
+        if (y > c.y + 14 || y < c.y - 10) y = c.y - 8 + Math.random() * 4;
         p.setXYZ(i, x, y, z);
       }
       p.needsUpdate = true;

@@ -38,21 +38,27 @@ const opcoes = Object.assign({ qualidade: toque ? 'baixa' : 'media', sens: 1, vo
 const Q = opcoes.qualidade;
 
 const canvas = $('ecra');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: Q === 'baixa', powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, { baixa: 1, media: 1.25, alta: 2 }[Q]));
+// Resolução máxima por qualidade; a resolução dinâmica baixa-a sozinha quando os FPS caem.
+const RES_MAX = Math.min(devicePixelRatio, { baixa: 0.85, media: 1, alta: 1.5 }[Q]);
+const RES_MIN = { baixa: 0.45, media: 0.5, alta: 0.6 }[Q];
+let escalaRes = RES_MAX;
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: Q === 'media', powerPreference: 'high-performance', stencil: false });
+renderer.setPixelRatio(escalaRes);
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = Q !== 'baixa';
 renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.shadowMap.autoUpdate = false; // a sombra só é recalculada de 2 em 2 fotogramas (ver desenhar)
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.62;
 
 const cena = new THREE.Scene();
 const camara = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, 0.1, 6000);
 
+// Pós-processamento (bloom e correção de cor) só na qualidade alta; nas outras a vinheta é feita em CSS.
 let composer = null;
 let passoCor = null;
-if (Q !== 'baixa') {
-  const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: Q === 'alta' ? 4 : 2 });
+if (Q === 'alta') {
+  const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: 2 });
   composer = new THREE.EffectComposer(renderer, rt);
   composer.setPixelRatio(renderer.getPixelRatio());
   composer.addPass(new THREE.RenderPass(cena, camara));
@@ -75,14 +81,44 @@ if (Q !== 'baixa') {
   });
   composer.addPass(passoCor);
   composer.addPass(new THREE.OutputPass());
+} else {
+  document.body.classList.add('vinheta-css');
+}
+
+function aplicarResolucao() {
+  renderer.setPixelRatio(escalaRes);
+  renderer.setSize(innerWidth, innerHeight);
+  if (composer) {
+    composer.setPixelRatio(escalaRes);
+    composer.setSize(innerWidth, innerHeight);
+  }
 }
 
 addEventListener('resize', () => {
   camara.aspect = innerWidth / innerHeight;
   camara.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
-  if (composer) composer.setSize(innerWidth, innerHeight);
+  aplicarResolucao();
 });
+
+// Resolução dinâmica: mede o tempo médio dos fotogramas e ajusta a escala para manter ~55+ FPS.
+const resDin = { soma: 0, n: 0, t: 0 };
+function ajustarResolucao(dt) {
+  resDin.soma += dt;
+  resDin.n++;
+  resDin.t += dt;
+  if (resDin.t < 1) return;
+  const fps = resDin.n / resDin.soma;
+  resDin.soma = 0;
+  resDin.n = 0;
+  resDin.t = 0;
+  let nova = escalaRes;
+  if (fps < 48) nova = Math.max(RES_MIN, escalaRes * (fps < 30 ? 0.8 : 0.9));
+  else if (fps > 58 && escalaRes < RES_MAX) nova = Math.min(RES_MAX, escalaRes * 1.06);
+  if (Math.abs(nova - escalaRes) > 0.01) {
+    escalaRes = nova;
+    aplicarResolucao();
+  }
+}
 
 // ------------------------------------------------------------------ estado do jogo
 const audio = new Audio();
@@ -180,6 +216,15 @@ async function arrancar() {
   await quadro();
   efeitos = new Efeitos(cena, tex);
   M = criarMateriais(tex);
+  if (Q !== 'alta') {
+    // sem iluminação de ambiente global: os metais recebem o mapa de reflexos diretamente
+    for (const m of Object.values(M)) {
+      if (m.metalness > 0.5) {
+        m.envMap = mundo.envMapa;
+        m.envMapIntensity = 0.7;
+      }
+    }
+  }
   jogador = new Jogador(ctx, M);
   for (const d of INIMIGOS) inimigos.push(new Inimigo(ctx, d, M));
   criarItens();
@@ -1022,15 +1067,19 @@ function navegarMenuComando(dt) {
 
 // ------------------------------------------------------------------ ciclo principal
 let fpsAcum = 0;
+let hudT = 0;
+let bussolaT = 0;
 let fpsN = 0;
 let tempoTitulo = 0;
 
 function ciclo() {
   requestAnimationFrame(ciclo);
   if (window.__parado) return; // usado pelos testes automáticos
-  const dt = Math.min(0.05, relogio.getDelta());
+  const dtReal = relogio.getDelta();
+  const dt = Math.min(0.05, dtReal);
   passo(dt);
   desenhar();
+  if (modo === 'jogo' && !document.hidden) ajustarResolucao(Math.min(0.2, dtReal));
 }
 
 function passo(dt) {
@@ -1206,18 +1255,33 @@ function passo(dt) {
   atualizarCamara(dt, rato);
   mundo.atualizar(dt, jogador.pos, camara);
   efeitos.atualizar(dtSim, jogador.pos);
-  hud.atualizar(dt, jogador, inimigos, camara, chefeAtivo);
+  // a interface é atualizada a 30 Hz e a bússola a 12 Hz (chega e poupa trabalho ao browser)
+  hudT += dt;
+  bussolaT += dt;
+  if (hudT >= 1 / 30) {
+    hud.atualizar(hudT, jogador, inimigos, camara, chefeAtivo);
+    hudT = 0;
+  }
   const extras = mundo.fogueiras.filter((f) => f.acesa).map((f) => ({ ang: (Math.atan2(f.dados.x - jogador.pos.x, -(f.dados.z - jogador.pos.z)) * 180) / Math.PI, cor: '#ffa040' }));
   if (progresso.mancha) extras.push({ ang: (Math.atan2(progresso.mancha.x - jogador.pos.x, -(progresso.mancha.z - jogador.pos.z)) * 180) / Math.PI, cor: '#9adf8a' });
-  hud.atualizarBussola(cam.yaw, extras);
+  if (bussolaT >= 1 / 12) {
+    hud.atualizarBussola(cam.yaw, extras);
+    bussolaT = 0;
+  }
+  const perigo = jogador.hp / jogador.hpMax < 0.25 && jogador.estado !== 'morto' ? 0.5 + Math.sin(t * 4) * 0.15 : 0;
   if (passoCor) {
-    const perigo = jogador.hp / jogador.hpMax < 0.25 && jogador.estado !== 'morto' ? 0.5 + Math.sin(t * 4) * 0.15 : 0;
     passoCor.uniforms.uVermelho.value += (perigo - passoCor.uniforms.uVermelho.value) * Math.min(1, dt * 3);
+  } else if (Math.abs(perigo - (hud.perigoCss || 0)) > 0.04) {
+    hud.perigoCss = perigo;
+    $('perigo').style.opacity = perigo.toFixed(2);
   }
   entrada.limpar();
 }
 
+let quadroN = 0;
 function desenhar() {
+  quadroN++;
+  if (renderer.shadowMap.enabled && (quadroN % 2 === 1 || modo === 'titulo')) renderer.shadowMap.needsUpdate = true;
   if (composer) composer.render();
   else renderer.render(cena, camara);
 }
@@ -1231,14 +1295,14 @@ arrancar().catch((e) => {
 // acesso para depuração na consola do browser
 window.valdoria = {
   get jogador() { return jogador; }, get mundo() { return mundo; }, get modo() { return modo; }, get menu() { return menu; }, inimigos, cam, camara, progresso, hud,
-  renderer, cena, comecar, descansar, ir(x, z) { jogador.colocar(x, z, jogador.rot); },
+  desenharSo: () => desenhar(), renderer, cena, comecar, descansar, ir(x, z) { jogador.colocar(x, z, jogador.rot); },
   // avança a simulação sem depender do relógio (testes automáticos)
-  simular(seg, dt = 1 / 30, antes) {
+  simular(seg, dt = 1 / 30, antes, semDesenho) {
     for (let t = 0; t < seg; t += dt) {
       if (antes) antes(t);
       passo(dt);
     }
-    desenhar();
+    if (!semDesenho) desenhar();
   },
   entrada,
 };

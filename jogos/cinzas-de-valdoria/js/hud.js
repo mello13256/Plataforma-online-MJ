@@ -3,6 +3,28 @@ import * as THREE from '../vendor/three.js';
 import { ARMAS } from './dados.js';
 
 const $ = (id) => document.getElementById(id);
+const ultimos = new WeakMap();
+// escreve um estilo/texto só quando muda (evita recalcular a página em cada fotograma)
+function por(el, prop, valor) {
+  let m = ultimos.get(el);
+  if (!m) {
+    m = {};
+    ultimos.set(el, m);
+  }
+  if (m[prop] === valor) return;
+  m[prop] = valor;
+  if (prop === 'textContent') el.textContent = valor;
+  else el.style[prop] = valor;
+}
+const cacheSel = new Map();
+const q = (el, sel) => {
+  let porEl = cacheSel.get(el);
+  if (!porEl) {
+    porEl = {};
+    cacheSel.set(el, porEl);
+  }
+  return porEl[sel] || (porEl[sel] = el.querySelector(sel));
+};
 const v3 = new THREE.Vector3();
 
 export class Hud {
@@ -37,6 +59,9 @@ export class Hud {
       return { s, a };
     });
     this.marcasExtra = [];
+    addEventListener('resize', () => {
+      this.largBussola = 0;
+    });
   }
 
   mostrar(v) {
@@ -47,14 +72,14 @@ export class Hud {
     // barras escalam com o máximo (como nos souls)
     const largHp = Math.min(innerWidth * 0.5, J.hpMax * 0.62);
     const largEn = Math.min(innerWidth * 0.4, J.energiaMax * 1.9);
-    this.hp.style.width = `${largHp}px`;
-    this.en.style.width = `${largEn}px`;
-    this.hp.querySelector('.valor').style.transform = `scaleX(${Math.max(0, J.hp / J.hpMax)})`;
-    this.hp.querySelector('.perda').style.transform = `scaleX(${Math.max(0, J.hpVisivel / J.hpMax)})`;
-    this.en.querySelector('.valor').style.transform = `scaleX(${Math.max(0, J.energia / J.energiaMax)})`;
-    $('n-frasco').textContent = J.frascos;
+    por(this.hp, 'width', String(`${largHp}px`));
+    por(this.en, 'width', String(`${largEn}px`));
+    por(q(this.hp, '.valor'), 'transform', String(`scaleX(${Math.max(0, J.hp / J.hpMax)})`));
+    por(q(this.hp, '.perda'), 'transform', String(`scaleX(${Math.max(0, J.hpVisivel / J.hpMax)})`));
+    por(q(this.en, '.valor'), 'transform', String(`scaleX(${Math.max(0, J.energia / J.energiaMax)})`));
+    por($('n-frasco'), 'textContent', String(J.frascos));
     $('ic-frasco').classList.toggle('vazio', J.frascos === 0);
-    $('nome-arma').textContent = ARMAS[J.arma].nome;
+    por($('nome-arma'), 'textContent', String(ARMAS[J.arma].nome));
 
     // almas a contar
     if (this.almasMostradas !== J.almas) {
@@ -62,17 +87,17 @@ export class Hud {
       this.almasMostradas += Math.sign(d) * Math.max(1, Math.ceil(Math.abs(d) * Math.min(1, dt * 4)));
       if (Math.sign(J.almas - this.almasMostradas) !== Math.sign(d)) this.almasMostradas = J.almas;
     }
-    $('n-almas').textContent = this.almasMostradas.toLocaleString('pt-PT');
+    por($('n-almas'), 'textContent', String(this.almasMostradas.toLocaleString('pt-PT')));
     this.tGanho -= dt;
-    $('almas-ganho').style.opacity = this.tGanho > 0 ? 1 : 0;
+    por($('almas-ganho'), 'opacity', String(this.tGanho > 0 ? 1 : 0));
 
     // chefe
     if (chefeAtivo && chefeAtivo.vivo) {
       this.chefe.classList.add('visivel');
-      $('chefe-nome').textContent = chefeAtivo.nome;
-      this.chefe.querySelector('.valor').style.transform = `scaleX(${Math.max(0, chefeAtivo.hp / chefeAtivo.hpMax)})`;
-      this.chefe.querySelector('.perda').style.transform = `scaleX(${Math.max(0, chefeAtivo.hpVisivel / chefeAtivo.hpMax)})`;
-      $('chefe-dano').textContent = chefeAtivo.tDanoAcum > 0 ? Math.round(chefeAtivo.danoAcum) : '';
+      por($('chefe-nome'), 'textContent', String(chefeAtivo.nome));
+      por(q(this.chefe, '.valor'), 'transform', String(`scaleX(${Math.max(0, chefeAtivo.hp / chefeAtivo.hpMax)})`));
+      por(q(this.chefe, '.perda'), 'transform', String(`scaleX(${Math.max(0, chefeAtivo.hpVisivel / chefeAtivo.hpMax)})`));
+      por($('chefe-dano'), 'textContent', String(chefeAtivo.tDanoAcum > 0 ? Math.round(chefeAtivo.danoAcum) : ''));
     } else {
       this.chefe.classList.remove('visivel');
     }
@@ -88,45 +113,46 @@ export class Hud {
       v3.set(ini.pos.x, ini.pos.y + ini.altura + 0.35, ini.pos.z).project(camara);
       if (v3.z > 1) continue;
       const b = this.barrasInimigos[i++];
-      b.style.display = 'block';
-      b.style.left = `${(v3.x * 0.5 + 0.5) * W}px`;
-      b.style.top = `${(-v3.y * 0.5 + 0.5) * H}px`;
-      b.querySelector('.v').style.transform = `scaleX(${Math.max(0, ini.hp / ini.hpMax)})`;
-      b.querySelector('.p').style.transform = `scaleX(${Math.max(0, ini.hpVisivel / ini.hpMax)})`;
-      b.querySelector('.d').textContent = ini.tDanoAcum > 0 ? Math.round(ini.danoAcum) : '';
+      por(b, 'display', 'block');
+      por(b, 'left', `${Math.round((v3.x * 0.5 + 0.5) * W)}px`);
+      por(b, 'top', `${Math.round((-v3.y * 0.5 + 0.5) * H)}px`);
+      por(q(b, '.v'), 'transform', String(`scaleX(${Math.max(0, ini.hp / ini.hpMax)})`));
+      por(q(b, '.p'), 'transform', String(`scaleX(${Math.max(0, ini.hpVisivel / ini.hpMax)})`));
+      por(q(b, '.d'), 'textContent', String(ini.tDanoAcum > 0 ? Math.round(ini.danoAcum) : ''));
     }
-    for (; i < this.barrasInimigos.length; i++) this.barrasInimigos[i].style.display = 'none';
+    for (; i < this.barrasInimigos.length; i++) por(this.barrasInimigos[i], 'display', 'none');
 
     // mira do alvo fixo
     const mira = $('mira');
     if (J.alvo && J.alvo.vivo) {
       const a = J.alvo;
       v3.set(a.pos.x, a.pos.y + a.altura * 0.6, a.pos.z).project(camara);
-      mira.style.display = v3.z < 1 ? 'block' : 'none';
-      mira.style.left = `${(v3.x * 0.5 + 0.5) * W}px`;
-      mira.style.top = `${(-v3.y * 0.5 + 0.5) * H}px`;
-    } else mira.style.display = 'none';
+      por(mira, 'display', String(v3.z < 1 ? 'block' : 'none'));
+      por(mira, 'left', String(`${(v3.x * 0.5 + 0.5) * W}px`));
+      por(mira, 'top', String(`${(-v3.y * 0.5 + 0.5) * H}px`));
+    } else por(mira, 'display', 'none');
 
     this.tAviso -= dt;
-    if (this.tAviso <= 0) $('aviso').style.opacity = 0;
+    if (this.tAviso <= 0) por($('aviso'), 'opacity', '0');
     this.tArea -= dt;
-    if (this.tArea <= 0) $('area').style.opacity = 0;
+    if (this.tArea <= 0) por($('area'), 'opacity', '0');
   }
 
   atualizarBussola(yaw, extras) {
     const rumo = (Math.atan2(Math.sin(yaw), -Math.cos(yaw)) * 180) / Math.PI;
-    const larg = this.faixa.parentElement.clientWidth;
+    // a largura só é lida quando a janela muda (ler medidas do DOM em cada fotograma obriga a recalcular a página)
+    const larg = this.largBussola || (this.largBussola = this.faixa.parentElement.clientWidth);
     const pxGrau = larg / 180;
     const colocar = (s, a) => {
       let d = a - rumo;
       while (d > 180) d -= 360;
       while (d < -180) d += 360;
       if (Math.abs(d) > 95) {
-        s.style.display = 'none';
+        por(s, 'display', 'none');
         return;
       }
-      s.style.display = 'block';
-      s.style.left = `${larg / 2 + d * pxGrau}px`;
+      por(s, 'display', 'block');
+      por(s, 'left', `${Math.round(larg / 2 + d * pxGrau)}px`);
     };
     for (const m of this.marcasBussola) colocar(m.s, m.a);
     while (this.marcasExtra.length < extras.length) {
@@ -138,7 +164,7 @@ export class Hud {
     this.marcasExtra.forEach((s, i) => {
       const e = extras[i];
       if (!e) {
-        s.style.display = 'none';
+        por(s, 'display', 'none');
         return;
       }
       s.textContent = '◆';
@@ -157,13 +183,13 @@ export class Hud {
   aviso(texto, dur = 2.6) {
     const a = $('aviso');
     a.textContent = texto;
-    a.style.opacity = 1;
+    por(a, 'opacity', '1');
     this.tAviso = dur;
   }
 
   area(nome) {
     $('area-nome').textContent = nome;
-    $('area').style.opacity = 1;
+    por($('area'), 'opacity', '1');
     this.tArea = 3.5;
   }
 
