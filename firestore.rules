@@ -100,6 +100,29 @@ service cloud.firestore {
         && (lista.size() < 5 || transferenciaValida(lista[4]));
     }
 
+    // Pastas de jogos do repositório reservadas a uma conta: só jogos dessa conta as podem usar
+    // (nem como «Pasta do GitHub», nem como ligação externa para os mesmos ficheiros).
+    // Manter igual a jogos/reservas.json (o teste test/preparar-site.test.mjs confirma).
+    function pastasReservadas() {
+      return {
+        'cinzas-de-valdoria': uidDono()
+      };
+    }
+
+    function pastaLivre(pasta, autor) {
+      return !(pasta in pastasReservadas()) || pastasReservadas()[pasta] == autor;
+    }
+
+    // Ligações para os ficheiros de uma pasta reservada, em qualquer site (Firebase, GitHub Pages…).
+    function urlDePastaReservada(url) {
+      return url.matches('(?i).*/jogos/cinzas-de-valdoria([/?#].*)?');
+    }
+
+    function origemPermitida(j) {
+      return (j.tipo != 'repositorio' || pastaLivre(j.caminho.split('/')[1], j.autor_uid))
+        && (j.tipo != 'ligacao' || j.autor_uid == uidDono() || !urlDePastaReservada(j.url_externo));
+    }
+
     function caminhoSeguro(valor, padrao) {
       return textoAte(valor, 300) && valor.matches(padrao) && !valor.matches('.*\\.\\..*');
     }
@@ -129,7 +152,8 @@ service cloud.firestore {
             && j.url_externo.matches('^https?://.+'))
           || (j.tipo == 'nenhum' && j.caminho == null && j.url_externo == null
             && j.get('transferencias', []).size() > 0)
-        );
+        )
+        && origemPermitida(j);
     }
 
     // ---------------------------------------------------------------- pacotes

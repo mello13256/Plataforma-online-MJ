@@ -2,7 +2,8 @@
 // - copia o site (pasta «site/»);
 // - copia cada jogo da pasta «jogos/» (pastas ou ficheiros .zip, que são extraídos);
 // - copia as imagens da pasta «capas/»;
-// - gera «indice-repositorio.json», usado pelo painel para escolher jogos e capas.
+// - gera «indice-repositorio.json», usado pelo painel para escolher jogos e capas;
+// - marca as pastas reservadas a uma conta (jogos/reservas.json), que o painel esconde das outras contas.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -84,6 +85,8 @@ export function prepararSite({ raiz, destino = path.join(raiz, 'publicar') }) {
     ? fs.readdirSync(pastaJogos, { withFileTypes: true }).filter((e) => !IGNORAR.has(e.name) && !e.name.startsWith('.'))
     : [];
   const usadas = new Map();
+  const ficheiroReservas = path.join(pastaJogos, 'reservas.json');
+  const reservas = fs.existsSync(ficheiroReservas) ? JSON.parse(fs.readFileSync(ficheiroReservas, 'utf8')).pastas || {} : {};
 
   for (const origem of origens.sort((a, b) => a.name.localeCompare(b.name))) {
     const ezip = origem.isFile() && /\.zip$/i.test(origem.name);
@@ -116,6 +119,7 @@ export function prepararSite({ raiz, destino = path.join(raiz, 'publicar') }) {
       origem: origem.name,
       caminho: `jogos/${pasta}/${entrada}`,
       capa: capa ? `jogos/${pasta}/${capa}` : null,
+      ...(reservas[pasta] ? { reservado_para: reservas[pasta] } : {}),
     });
   }
 

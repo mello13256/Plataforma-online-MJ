@@ -55,6 +55,8 @@ que corre diretamente no browser (Three.js, sem instalar nada). Tudo é gerado p
 - Opções de câmara (primeira/terceira pessoa), qualidade gráfica (baixa/média/alta), sensibilidade, volume e eixo invertido.
 
 Para o publicar no site: **Painel → Publicar jogo → Pasta do GitHub** e escolher `cinzas-de-valdoria` (a capa é detetada automaticamente).
+A pasta está reservada à conta do dono da plataforma (`jogos/reservas.json` e `firestore.rules`): as outras contas não a veem no painel
+e a base de dados recusa qualquer jogo delas que use esta pasta ou uma ligação para os mesmos ficheiros.
 
 Para o experimentar localmente: `npx serve jogos/cinzas-de-valdoria` (ou qualquer servidor estático) e abrir o endereço indicado.
 O código está em `jogos/cinzas-de-valdoria/js/` (um módulo por área: `mundo.js`, `folhagem.js`, `atores.js`, `modelos.js`, `primeira-pessoa.js`, `principal.js`…).

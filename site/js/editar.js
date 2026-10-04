@@ -757,6 +757,8 @@ try {
   const perfil = await exigirPerfil(conteudo);
   if (perfil) {
     const [indice, resultado] = await Promise.all([lerIndiceRepositorio(), getDocs(collection(bd, 'jogos'))]);
+    // pastas reservadas a outra conta não aparecem (as regras da base de dados também as recusam)
+    indice.jogos = indice.jogos.filter((j) => !j.reservado_para || j.reservado_para === perfil.uid);
     const todosJogos = resultado.docs.map((d) => ({ id: d.id, ...d.data() }));
     const categoriasUsadas = [...new Set(todosJogos.map((j) => j.categoria))];
     let jogo = null;
