@@ -45,7 +45,7 @@ que corre diretamente no browser (Three.js, sem instalar nada). Tudo é gerado p
   O corpo continua a projetar sombra. A terceira pessoa continua disponível nas Opções.
 - **Fogueiras**: acender, descansar (os inimigos regressam), subir de nível (Vitalidade, Resistência, Força) e viajar entre fogueiras.
 - **Morte**: as almas ficam no local onde morreste — volta lá para as recuperar antes de morreres outra vez.
-- **Inimigos**: esvaziados, lobos sombrios, cavaleiros caídos e dois chefes — *Fenrath, o Lobo Ancestral* e
+- **Inimigos** com armaduras de placas, malha de aço, brasões pintados, trapos rasgados e pelo — esvaziados, lobos sombrios, cavaleiros caídos e dois chefes — *Fenrath, o Lobo Ancestral* e
   *Valdor, o Rei Caído* (atrás de uma porta de nevoeiro, com segunda fase em chamas).
 - Mapa, bússola, mensagens no chão, gravação automática no browser, teclado e rato, **comando** e controlos táteis.
 - Opções de câmara (primeira/terceira pessoa), qualidade gráfica (baixa/média/alta), sensibilidade, volume e eixo invertido.

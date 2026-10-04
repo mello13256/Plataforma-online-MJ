@@ -3,6 +3,7 @@ import * as THREE from '../vendor/three.js';
 import { criarTexturas } from './texturas.js';
 import { Mundo, altura, regiaoEm, pesoCaminho } from './mundo.js';
 import { criarMateriais } from './modelos.js';
+import { criarTexturasDetalhe } from './texturas-detalhe.js';
 import { Jogador, Inimigo } from './atores.js';
 import { Efeitos } from './efeitos.js';
 import { Audio } from './audio.js';
@@ -232,7 +233,7 @@ async function arrancar() {
   carregar(0.76, 'A despertar os mortos…');
   await quadro();
   efeitos = new Efeitos(cena, tex);
-  M = criarMateriais(tex);
+  M = criarMateriais(tex, criarTexturasDetalhe(Q));
   if (Q !== 'alta') {
     // sem iluminação de ambiente global: os metais recebem o mapa de reflexos diretamente
     for (const m of Object.values(M)) {

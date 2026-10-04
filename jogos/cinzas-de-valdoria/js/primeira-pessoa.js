@@ -1,227 +1,13 @@
 // Primeira pessoa: braços com manoplas articuladas, armas, escudo e frasco em alta qualidade,
 // desenhados numa camada própria (nunca atravessam paredes) e animados para cada ação do jogador.
 import * as THREE from '../vendor/three.js';
-import { gerar, normalDeAltura, paraTextura, fbmP, criarCanvas } from './texturas.js';
-import { ruidoPeriodico } from './ruido.js';
+import { criarTexturasDetalhe } from './texturas-detalhe.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const suave = (t) => {
   t = Math.min(1, Math.max(0, t));
   return t * t * (3 - 2 * t);
 };
-const cl = (v) => (v < 0 ? 0 : v > 255 ? 255 : v);
-
-// ------------------------------------------------------------------ texturas de detalhe
-
-function texturas(qualidade) {
-  const T = qualidade === 'alta' ? 512 : 256;
-  const r = {};
-  // aço martelado e riscado
-  {
-    const n1 = ruidoPeriodico(301, 4);
-    const n2 = ruidoPeriodico(302, 24);
-    const n3 = ruidoPeriodico(303, 128);
-    const n4 = ruidoPeriodico(304, 64);
-    const altura = new Float32Array(T * T);
-    const { cor } = gerar(T, (x, y, p) => {
-      const u = x / T, v = y / T;
-      const sujo = fbmP(n1, u * 4, v * 4, 3);
-      const martelo = fbmP(n2, u * 24, v * 24, 2);
-      const risco = Math.pow(n3(u * 128, v * 9 + u * 3), 12) + Math.pow(n4(u * 7 + v * 2, v * 64), 14) * 0.7;
-      const b = 168 + martelo * 30 - sujo * 55 + risco * 60;
-      p[0] = cl(b * 0.98);
-      p[1] = cl(b * 0.97);
-      p[2] = cl(b * 0.95);
-      p[3] = 0;
-      altura[y * T + x] = martelo * 0.8 - risco * 0.5;
-    });
-    r.aco = paraTextura(cor, true);
-    r.acoN = paraTextura(normalDeAltura(altura, T, 3), false);
-    const { cor: rug } = gerar(T, (x, y, p) => {
-      const u = x / T, v = y / T;
-      const sujo = fbmP(n1, u * 4, v * 4, 3);
-      const risco = Math.pow(n3(u * 128, v * 9 + u * 3), 12);
-      const g = cl(70 + sujo * 120 + risco * 90);
-      p[0] = g; p[1] = g; p[2] = g; p[3] = 0;
-    });
-    r.acoRug = paraTextura(rug, false);
-  }
-  // couro com grão e costuras
-  {
-    const n1 = ruidoPeriodico(311, 64);
-    const n2 = ruidoPeriodico(312, 8);
-    const { cor, alt } = gerar(T / 2, (x, y, p) => {
-      const u = x / (T / 2), v = y / (T / 2);
-      const grao = n1(u * 64, v * 64);
-      const manchas = fbmP(n2, u * 8, v * 8, 3);
-      const costura = (Math.abs(((v * 8) % 1) - 0.5) < 0.04 && ((u * 24) % 1) < 0.55) ? 1 : 0;
-      const b = 0.75 + manchas * 0.35 + grao * 0.15 - costura * 0.25;
-      p[0] = cl(98 * b + costura * 40);
-      p[1] = cl(66 * b + costura * 34);
-      p[2] = cl(42 * b + costura * 24);
-      p[3] = grao * 0.6 - costura * 0.6;
-    });
-    r.couro = paraTextura(cor, true);
-    r.couroN = paraTextura(normalDeAltura(alt, T / 2, 3), false);
-  }
-  // malha de aço (anéis entrelaçados)
-  {
-    const Tm = 256;
-    const aneis = 16;
-    const { cor, alt } = gerar(Tm, (x, y, p) => {
-      const cu = (x / Tm) * aneis;
-      const cv = (y / Tm) * aneis * 1.6;
-      const linha = Math.floor(cv);
-      const fu = cu + (linha % 2) * 0.5;
-      const dx = (fu % 1) - 0.5;
-      const dy = (cv % 1) - 0.5;
-      const d = Math.hypot(dx, dy * 0.8);
-      const anel = Math.max(0, 1 - Math.abs(d - 0.32) / 0.12);
-      const b = 52 + anel * 120;
-      p[0] = cl(b); p[1] = cl(b * 0.98); p[2] = cl(b * 0.95);
-      p[3] = anel;
-    });
-    r.malha = paraTextura(cor, true);
-    r.malhaN = paraTextura(normalDeAltura(alt, Tm, 6), false);
-    r.malha.repeat.set(2.5, 1.6);
-    r.malhaN.repeat.set(2.5, 1.6);
-  }
-  // tecido da manga
-  {
-    const n1 = ruidoPeriodico(321, 16);
-    const { cor } = gerar(128, (x, y, p) => {
-      const u = x / 128, v = y / 128;
-      const trama = (Math.sin(u * 128 * Math.PI) * Math.sin(v * 128 * Math.PI)) * 0.5 + 0.5;
-      const g = fbmP(n1, u * 16, v * 16, 3);
-      const b = 0.7 + g * 0.35 + trama * 0.12;
-      p[0] = cl(64 * b); p[1] = cl(30 * b); p[2] = cl(26 * b); p[3] = 0;
-    });
-    r.tecido = paraTextura(cor, true);
-  }
-  // pega enrolada em couro (espiral)
-  {
-    const { cor, alt } = gerar(128, (x, y, p) => {
-      const u = x / 128, v = y / 128;
-      const espiral = ((v * 10 + u) % 1);
-      const sulco = Math.min(espiral, 1 - espiral) < 0.08 ? 1 : 0;
-      const b = 0.8 + Math.sin(u * 60) * 0.05 - sulco * 0.45;
-      p[0] = cl(70 * b); p[1] = cl(46 * b); p[2] = cl(30 * b);
-      p[3] = 1 - sulco;
-    });
-    r.pega = paraTextura(cor, true);
-    r.pegaN = paraTextura(normalDeAltura(alt, 128, 4), false);
-  }
-  // madeira em tábuas com veio fino (cabo do machado, costas do escudo)
-  {
-    const n1 = ruidoPeriodico(331, 8);
-    const n2 = ruidoPeriodico(332, 64);
-    const n3 = ruidoPeriodico(333, 16);
-    const tabuas = 4;
-    const { cor, alt } = gerar(256, (x, y, p) => {
-      const u = x / 256, v = y / 256;
-      const t = Math.floor(u * tabuas);
-      const fu = u * tabuas - t;
-      const tom = 0.82 + ((t * 7919) % 5) * 0.05;
-      const ondula = fbmP(n1, u * 8, v * 8, 3) * 0.6;
-      const veio = Math.pow(Math.abs(Math.sin((fu * 9 + ondula * 3 + t * 1.7) * Math.PI)), 0.35);
-      const fibra = n2(u * 64, v * 4) * 0.25;
-      const no = Math.max(0, 1 - Math.hypot((fu - 0.5) * 3, ((v + t * 0.37) % 1 - 0.5) * 6)) * fbmP(n3, u * 16, v * 16, 2);
-      const junta = Math.min(fu, 1 - fu) < 0.025 ? 1 : 0;
-      const b = (0.55 + veio * 0.3 + fibra - no * 0.5) * tom * (1 - junta * 0.65);
-      p[0] = cl(128 * b); p[1] = cl(88 * b); p[2] = cl(54 * b);
-      p[3] = veio * 0.3 + fibra - junta * 1.2;
-    });
-    r.madeira = paraTextura(cor, true);
-    r.madeiraN = paraTextura(normalDeAltura(alt, 256, 3), false);
-  }
-  // face do escudo: brasão da Árvore Áurea pintado sobre madeira, com a tinta lascada
-  {
-    const Te = qualidade === 'alta' ? 1024 : 512;
-    const c = criarCanvas(Te);
-    const x = c.getContext('2d');
-    const grad = x.createLinearGradient(0, 0, 0, Te);
-    grad.addColorStop(0, '#6e1712');
-    grad.addColorStop(1, '#3e0c0a');
-    x.fillStyle = grad;
-    x.fillRect(0, 0, Te, Te);
-    // faixa e moldura pintadas
-    x.strokeStyle = '#b8902e';
-    x.lineWidth = Te * 0.035;
-    x.strokeRect(Te * 0.08, Te * 0.06, Te * 0.84, Te * 0.88);
-    // árvore dourada
-    x.save();
-    x.translate(Te / 2, Te * 0.52);
-    x.fillStyle = '#d6aa45';
-    x.strokeStyle = '#d6aa45';
-    x.lineCap = 'round';
-    x.lineWidth = Te * 0.04;
-    x.beginPath();
-    x.moveTo(0, Te * 0.28);
-    x.lineTo(0, -Te * 0.05);
-    x.stroke();
-    const ramo = (comp, ang, larg, nivel) => {
-      x.save();
-      x.rotate(ang);
-      x.lineWidth = larg;
-      x.beginPath();
-      x.moveTo(0, 0);
-      x.lineTo(0, -comp);
-      x.stroke();
-      x.translate(0, -comp);
-      if (nivel > 0) {
-        ramo(comp * 0.7, -0.45, larg * 0.65, nivel - 1);
-        ramo(comp * 0.7, 0.45, larg * 0.65, nivel - 1);
-      } else {
-        x.beginPath();
-        x.arc(0, 0, larg * 1.6, 0, Math.PI * 2);
-        x.fill();
-      }
-      x.restore();
-    };
-    x.translate(0, -Te * 0.05);
-    ramo(Te * 0.13, -0.5, Te * 0.03, 3);
-    ramo(Te * 0.13, 0.5, Te * 0.03, 3);
-    ramo(Te * 0.15, 0, Te * 0.03, 3);
-    x.restore();
-    x.beginPath();
-    x.arc(Te / 2, Te * 0.32, Te * 0.27, 0, Math.PI * 2);
-    x.strokeStyle = 'rgba(214, 170, 69, 0.85)';
-    x.lineWidth = Te * 0.012;
-    x.stroke();
-    // tinta lascada a mostrar a madeira, riscos e sujidade
-    const img = x.getImageData(0, 0, Te, Te);
-    const n1 = ruidoPeriodico(341, 16);
-    const n2 = ruidoPeriodico(342, 64);
-    const n3 = ruidoPeriodico(343, 128);
-    const alt = new Float32Array(Te * Te);
-    for (let yy = 0; yy < Te; yy++) {
-      for (let xx = 0; xx < Te; xx++) {
-        const u = xx / Te, v = yy / Te;
-        const i = (yy * Te + xx) * 4;
-        const lasca = fbmP(n1, u * 16, v * 16, 4) + Math.hypot(u - 0.5, v - 0.5) * 0.35;
-        const madeira = 0.75 + Math.sin((u * 40 + n2(u * 8, v * 64) * 4) * Math.PI) * 0.12;
-        const risco = Math.pow(n3(u * 128 + v * 30, v * 10), 14);
-        const sujo = fbmP(n2, u * 64, v * 64, 2);
-        let rr = img.data[i], gg = img.data[i + 1], bb = img.data[i + 2];
-        const semTinta = lasca > 0.72;
-        if (semTinta) {
-          rr = 120 * madeira; gg = 86 * madeira; bb = 56 * madeira;
-        }
-        const k = (0.78 + sujo * 0.3) * (1 - risco * 0.35);
-        img.data[i] = cl(rr * k + risco * 60);
-        img.data[i + 1] = cl(gg * k + risco * 55);
-        img.data[i + 2] = cl(bb * k + risco * 50);
-        alt[yy * Te + xx] = (semTinta ? 0.2 : 0.6) + sujo * 0.15 - risco * 0.4;
-      }
-    }
-    x.putImageData(img, 0, 0);
-    r.escudo = paraTextura(c, true);
-    r.escudo.wrapS = r.escudo.wrapT = THREE.ClampToEdgeWrapping;
-    r.escudoN = paraTextura(normalDeAltura(alt, Te, 4), false);
-    r.escudoN.wrapS = r.escudoN.wrapT = THREE.ClampToEdgeWrapping;
-  }
-  return r;
-}
 
 // ------------------------------------------------------------------ materiais
 
@@ -233,7 +19,7 @@ function materiais(t, env) {
   return {
     aco: metal(0xc8c4bc, 0.85),
     acoEscuro: metal(0x77736d, 1),
-    lamina: metal(0xd9d6d0, 0.78),
+    lamina: metal(0xcfccc6, 0.85),
     gume: new THREE.MeshStandardMaterial({ color: 0xe8eaec, metalness: 1, roughness: 0.32, envMap: env, envMapIntensity: 1.0 }),
     sulco: metal(0x6a6a6c, 0.9),
     latao: new THREE.MeshStandardMaterial({ color: 0xc9a050, metalness: 1, roughness: 0.38, roughnessMap: t.acoRug, envMap: env, envMapIntensity: 1.2 }),
@@ -767,7 +553,7 @@ export class PrimeiraPessoa {
     this.cena.add(this.cam);
     this.cena.environment = null;
     // luz igual à do mundo (a câmara deste "palco" roda como a câmara principal)
-    this.sol = new THREE.DirectionalLight(0xffd8ae, 2.4);
+    this.sol = new THREE.DirectionalLight(0xffd8ae, 2.0);
     this.sol.position.copy(mundo.dirSol).multiplyScalar(10);
     this.cena.add(this.sol);
     this.hemi = new THREE.HemisphereLight(0xa8b4c8, 0x40362a, 0.9);
@@ -775,7 +561,7 @@ export class PrimeiraPessoa {
     this.luzFogo = new THREE.PointLight(0xff8a3a, 0, 14, 1.4);
     this.cena.add(this.luzFogo);
 
-    const t = texturas(qualidade);
+    const t = criarTexturasDetalhe(qualidade);
     this.M = materiais(t, mundo.envMapa);
     this.raiz = new THREE.Group();
     this.cam.add(this.raiz);

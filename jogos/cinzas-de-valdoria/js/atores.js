@@ -603,7 +603,10 @@ export class Inimigo {
     this.rig.raiz.position.copy(this.pos);
     this.rig.raiz.rotation.y = this.rot;
     if (this.estado === 'sentado') this.anim.tocar('sentado', 2, { manter: true });
-    if (this.cfg.estilo === 'rei') this.M.laminaRei.emissiveIntensity = 0;
+    if (this.cfg.estilo === 'rei') {
+      this.M.laminaRei.emissiveIntensity = 0;
+      this.M.fendasRei.emissiveIntensity = 0;
+    }
     // chefes ficam à espera até serem despertados pelo jogo
     if (this.chefe) {
       this.estado = 'aguardar';
@@ -797,6 +800,7 @@ export class Inimigo {
           ctx.ondaDano(anel, this, 0.4, 'derrubar', true);
           ctx.tremer(0.6);
           this.M.laminaRei.emissiveIntensity = 2.5;
+          this.M.fendasRei.emissiveIntensity = 3;
         }
         if (this.t >= 2.4) this.mudarEstado('perseguir');
         break;
