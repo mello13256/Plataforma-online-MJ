@@ -612,6 +612,8 @@ export class PrimeiraPessoa {
     this.arma = nome;
     this.encaixeArma.clear();
     this.modeloArma = criarArmaFP(nome, this.M);
+    // o punho fechado ocupa y ≈ -0,045…0,05: a guarda fica logo acima do indicador e a mão aperta a pega
+    this.modeloArma.position.y = nome === 'machado' ? 0.03 : 0.062;
     this.encaixeArma.add(this.modeloArma);
   }
 
