@@ -115,7 +115,7 @@ try {
     preencher(zonaFilas, filtros ? null : [
       privados.length
         ? el('section', { class: 'fila' },
-            el('h2', {}, icone('cadeado'), 'Privados ', el('span', { class: 'opcional' }, '— só os administradores veem')),
+            el('h2', {}, icone('cadeado'), 'Privados'),
             el('div', { class: 'fila-cartoes' }, privados.map((j) => cartaoJogo(j, autores))))
         : null,
       fila('Continuar a jogar', 'relogio', lerLista('jogados').map((s) => porId.get(s)).filter(Boolean).slice(0, 6), autores),

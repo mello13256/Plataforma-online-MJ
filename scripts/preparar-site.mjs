@@ -3,7 +3,8 @@
 // - copia cada jogo da pasta «jogos/» (pastas ou ficheiros .zip, que são extraídos);
 // - copia as imagens da pasta «capas/»;
 // - gera «indice-repositorio.json», usado pelo painel para escolher jogos e capas;
-// - marca as pastas reservadas a uma conta (jogos/reservas.json), que o painel esconde das outras contas.
+// - marca as pastas reservadas a uma conta (jogos/reservas.json), que o painel esconde das outras contas;
+// - lista os ficheiros de cada jogo (para transferir o jogo completo em .zip).
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -66,7 +67,7 @@ function analisarJogo(pasta) {
     ficheiros
       .filter((f) => /(^|\/)(capa|cover)\.(png|jpe?g|webp|gif)$/i.test(f))
       .sort((a, b) => profundidade(a) - profundidade(b))[0] || null;
-  return { entrada, capa };
+  return { entrada, capa, ficheiros: [...ficheiros].sort() };
 }
 
 export function prepararSite({ raiz, destino = path.join(raiz, 'publicar') }) {
@@ -108,7 +109,7 @@ export function prepararSite({ raiz, destino = path.join(raiz, 'publicar') }) {
       continue;
     }
 
-    const { entrada, capa } = analisarJogo(alvo);
+    const { entrada, capa, ficheiros } = analisarJogo(alvo);
     if (!entrada) {
       fs.rmSync(alvo, { recursive: true, force: true });
       avisos.push(`«${origem.name}» foi ignorado: não tem nenhum index.html.`);
@@ -120,6 +121,8 @@ export function prepararSite({ raiz, destino = path.join(raiz, 'publicar') }) {
       caminho: `jogos/${pasta}/${entrada}`,
       capa: capa ? `jogos/${pasta}/${capa}` : null,
       ...(reservas[pasta] ? { reservado_para: reservas[pasta] } : {}),
+      // lista de ficheiros, para os administradores poderem transferir o jogo completo em .zip
+      ficheiros,
     });
   }
 

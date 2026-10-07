@@ -7,7 +7,7 @@ Funciona 100% no plano gratuito do Firebase (Spark):
 
 - **Firebase Hosting** — aloja o site e os ficheiros dos jogos;
 - **Firebase Authentication** — início de sessão dos autores (email e palavra-passe);
-- **Cloud Firestore** — títulos, descrições, categorias, rascunhos e contador de jogadas;
+- **Cloud Firestore** — títulos, descrições, categorias, visibilidade e contador de jogadas;
 - **GitHub Actions** — sempre que há alterações no repositório, o site é republicado automaticamente.
 
 ## Funcionalidades
@@ -23,12 +23,12 @@ Funciona 100% no plano gratuito do Firebase (Spark):
 **Para os autores:**
 - Publicar arrastando o jogo (pasta, `.zip`, `.html`) e as transferências (`.exe`, `.apk`…), com teste antes de publicar.
 - Capa e até 4 imagens de galeria arrastadas; categoria livre.
-- Visibilidade de cada jogo: **Público** (toda a gente), **Rascunho** (autores) ou **Privado** (só administradores e o próprio autor).
+- Visibilidade de cada jogo: **Público** ou **Privado** (só administradores e o próprio autor).
 - Apagar comentários dos próprios jogos.
 
 **Para o administrador (`/admin`):**
 - Estatísticas (jogos, jogadas, gostos, autores) e **espaço usado** face ao limite gratuito de 1 GB.
-- Todos os jogos com filtro (incluindo por estado: públicos, rascunhos, privados), editar e remover; criar contas; permissões de cada utilizador.
+- Todos os jogos com filtro (incluindo públicos/privados), **editar, transferir em .zip** e remover — também os jogos dos outros autores; criar contas; permissões de cada utilizador.
 - Fila **Privados** na página inicial, visível apenas para administradores.
 
 ## Jogos incluídos no repositório
@@ -165,7 +165,7 @@ firebase.json        configuração do Hosting (endereços, cabeçalhos)
 ### Segurança
 
 - Cada ação é verificada pelas regras do Firestore conforme as permissões do utilizador; o dono nunca perde a administração.
-- Os rascunhos só são visíveis para os autores; os convidados só podem somar +1 ao contador de jogadas.
+- Jogos privados só são visíveis para administradores e para o autor; os convidados só podem somar +1 ao contador de jogadas.
 - Contas novas só ganham acesso quando o administrador lhes atribui um perfil; uma conta sem perfil vê o mesmo que um convidado.
 - As regras validam todos os campos (categorias, tamanhos, caminhos e ligações `http(s)`).
 - Os jogos do repositório correm no mesmo domínio do site. Como só quem tem acesso ao repositório os pode adicionar, isto é seguro — não dês acesso ao repositório a quem não confias.

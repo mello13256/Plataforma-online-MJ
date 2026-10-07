@@ -2,9 +2,9 @@ import {
   addDoc, bd, collection, deleteDoc, doc, getDoc, getDocs, increment, orderBy, query, serverTimestamp, updateDoc, where,
 } from './firebase.js';
 import {
-  capa, carregarAutores, cartaoJogo, definirTitulo, estadoJogo, el, formatarData, formatarNumero, guardarLista, icone, iniciais,
+  capa, carregarAutores, cartaoJogo, definirTitulo, estadoJogo, seloEstado, el, formatarData, formatarNumero, guardarLista, icone, iniciais,
   jogavelNoBrowser, lerLista, mensagem, normalizar, notificar, obterPerfil, ordenarPorData, paginaErro, paragrafos,
-  partilhar, pode, preencher, prepararServiceWorker, registarJogado, selos, transferirFicheiro, traduzirErro, urlJogo,
+  partilhar, pode, preencher, prepararServiceWorker, registarJogado, selos, transferirFicheiro, transferirJogoCompleto, traduzirErro, urlJogo,
   utilizadorAtual, vazio,
 } from './comum.js';
 
@@ -283,13 +283,8 @@ try {
 
       preencher(conteudo,
         new URLSearchParams(location.search).has('novo')
-          ? mensagem('sucesso', {
-              publico: 'Jogo publicado! Já está visível para toda a gente.',
-              rascunho: 'Rascunho guardado. Só os autores o conseguem ver.',
-              privado: 'Jogo privado guardado. Só os administradores (e tu) o conseguem ver.',
-            }[estadoJogo(jogo)])
-          : estadoJogo(jogo) === 'rascunho' ? mensagem('aviso', 'Este jogo é um rascunho: só os autores o conseguem ver.')
-            : estadoJogo(jogo) === 'privado' ? mensagem('aviso', 'Jogo privado: só os administradores e o autor o conseguem ver.') : null,
+          ? mensagem('sucesso', jogo.publicado ? 'Jogo publicado!' : 'Jogo guardado como privado.')
+          : null,
         el('div', { class: 'pagina-jogo' },
           el('div', { class: 'bloco-texto' },
             el('div', {}, caixa, barra),
@@ -301,6 +296,7 @@ try {
               ),
             ),
             el('div', { class: 'meta' },
+              jogo.publicado ? null : seloEstado(jogo),
               el('a', { class: 'etiqueta', href: `/?categoria=${encodeURIComponent(jogo.categoria)}` }, jogo.categoria),
               el('span', {}, `Publicado a ${formatarData(jogo.criado_em)}`),
               jogo.atualizado_em && formatarData(jogo.atualizado_em) !== formatarData(jogo.criado_em)
@@ -333,6 +329,25 @@ try {
               }, icone('transferir'), `Transferir · ${t.rotulo}`)),
               transferencias.length ? el('p', { class: 'ajuda' }, 'Ficheiros .exe podem mostrar um aviso do Windows; confirma que vem de um autor em quem confias.') : null,
               podeEditar ? el('a', { class: 'botao secundario', href: `/editar?id=${jogo.id}` }, icone('editar'), 'Editar jogo') : null,
+              perfil && (pode(perfil, 'admin') || eDono) && jogo.tipo !== 'nenhum'
+                ? el('button', {
+                    type: 'button',
+                    class: 'botao secundario',
+                    onclick: async (evento) => {
+                      const botao = evento.currentTarget;
+                      const texto = botao.lastChild.textContent;
+                      botao.disabled = true;
+                      botao.lastChild.textContent = 'A preparar…';
+                      try {
+                        await transferirJogoCompleto(jogo, (feitos, total) => { botao.lastChild.textContent = `A preparar… ${feitos}/${total}`; });
+                      } catch (erro) {
+                        notificar(traduzirErro(erro), 'erro');
+                      }
+                      botao.disabled = false;
+                      botao.lastChild.textContent = texto;
+                    },
+                  }, icone('transferir'), jogo.tipo === 'ligacao' ? 'Abrir original' : 'Transferir jogo (.zip)')
+                : null,
             ),
             el('div', { class: 'caixa' },
               el('div', { class: 'estatisticas' },

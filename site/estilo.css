@@ -514,3 +514,11 @@ button.miniatura-galeria:hover img { transform: scale(1.04); }
   .cartao-numero.largo { grid-column: auto; }
   .titulo-jogo .acoes { width: 100%; }
 }
+.opcao-segmentada { position: relative; display: block; cursor: pointer; }
+.opcao-segmentada input { position: absolute; opacity: 0; pointer-events: none; }
+.opcao-segmentada span {
+  display: flex; align-items: center; justify-content: center; gap: .5rem; padding: .7rem 1rem; border-radius: 10px;
+  font-weight: 700; color: var(--texto-suave);
+}
+.opcao-segmentada input:checked + span { background: var(--superficie); color: var(--texto); box-shadow: var(--sombra); }
+.opcao-segmentada input:focus-visible + span { outline: 3px solid color-mix(in srgb, var(--destaque) 55%, transparent); }

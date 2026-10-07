@@ -195,14 +195,12 @@ service cloud.firestore {
       }
     }
 
-    // Público: todos. Rascunho: autores. Privado: administradores e o próprio autor.
-    // Nota: não usar j.get('privado', false) aqui — nas listagens, o valor por omissão
-    // faria passar jogos privados. Só se aceita quando privado é explicitamente false.
+    // Público: todos. Não publicado (privado): só administradores e o próprio autor.
     function podeVerDados(j) {
       return j.publicado == true
         || eDono()
         || pode('admin')
-        || (temPerfil() && (j.autor_uid == request.auth.uid || j.privado == false));
+        || (temPerfil() && j.autor_uid == request.auth.uid);
     }
 
     function podeVerJogo(slug) {

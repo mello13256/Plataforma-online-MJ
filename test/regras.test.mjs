@@ -294,20 +294,35 @@ describe('jogos privados', () => {
   it('listar sem filtro nunca devolve jogos privados a quem não pode', async () => {
     await assertFails(getDocs(collection(como('antigo'), 'jogos')));
     await assertFails(getDocs(collection(visitante(), 'jogos')));
-    const resultado = await getDocs(query(collection(como('antigo'), 'jogos'), where('privado', '==', false)));
-    if (resultado.docs.some((d) => d.id === 'privado')) throw new Error('jogo privado devolvido');
+    await assertFails(getDocs(query(collection(como('antigo'), 'jogos'), where('privado', '==', false))));
+    const resultado = await getDocs(query(collection(como('antigo'), 'jogos'), where('publicado', '==', true)));
+    if (resultado.docs.some((d) => d.id === 'privado' || d.id === 'rascunho')) throw new Error('jogo não público devolvido');
   });
 
   it('o administrador lista todos os jogos; outros autores só com filtro', async () => {
     await assertSucceeds(getDocs(collection(como(DONO), 'jogos')));
     await assertFails(getDocs(collection(como('antigo'), 'jogos')));
-    await assertSucceeds(getDocs(query(collection(como('antigo'), 'jogos'), where('privado', '==', false))));
+    await assertSucceeds(getDocs(query(collection(como('antigo'), 'jogos'), where('publicado', '==', true))));
+    await assertSucceeds(getDocs(query(collection(como('antigo'), 'jogos'), where('autor_uid', '==', 'antigo'))));
     await assertSucceeds(getDocs(query(collection(como(DONO), 'jogos'), where('privado', '==', true))));
   });
 
   it('autores verificam se um endereço de jogo está livre', async () => {
     await assertSucceeds(getDoc(doc(como('antigo'), 'jogos/ainda-nao-existe')));
     await assertSucceeds(getDoc(doc(visitante(), 'jogos/ainda-nao-existe')));
+  });
+
+  it('jogos não publicados (antigos rascunhos) só são vistos pelo autor e administradores', async () => {
+    await assertFails(getDoc(doc(como('antigo'), 'jogos/rascunho')));
+    await assertFails(getDoc(doc(como('editor'), 'jogos/rascunho')));
+    await assertSucceeds(getDoc(doc(como('joel'), 'jogos/rascunho')));
+    await assertSucceeds(getDoc(doc(como(DONO), 'jogos/rascunho')));
+  });
+
+  it('o administrador edita e apaga jogos de outros autores', async () => {
+    await assertSucceeds(updateDoc(doc(como(DONO), 'jogos/privado'), { titulo: 'Editado pelo admin', atualizado_em: serverTimestamp() }));
+    await assertSucceeds(updateDoc(doc(como(DONO), 'jogos/publicado'), { publicado: false, privado: true, atualizado_em: serverTimestamp() }));
+    await assertSucceeds(deleteDoc(doc(como(DONO), 'jogos/privado')));
   });
 
   it('um jogo não pode ser público e privado ao mesmo tempo', async () => {

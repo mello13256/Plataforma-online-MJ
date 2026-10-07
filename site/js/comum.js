@@ -241,22 +241,21 @@ export function novidade(jogo) {
   return null;
 }
 
-// Estado de visibilidade: 'publico', 'rascunho' ou 'privado' (só administradores e o autor).
+// Estado de visibilidade: 'publico' ou 'privado'.
 export function estadoJogo(jogo) {
-  if (jogo.publicado) return 'publico';
-  return jogo.privado ? 'privado' : 'rascunho';
+  return jogo.publicado ? 'publico' : 'privado';
 }
 
 export function seloEstado(jogo) {
   const estado = estadoJogo(jogo);
-  const nomes = { publico: 'Público', rascunho: 'Rascunho', privado: 'Privado' };
+  const nomes = { publico: 'Público', privado: 'Privado' };
   return el('span', { class: `estado ${estado}` }, estado === 'privado' ? [icone('cadeado'), nomes[estado]] : nomes[estado]);
 }
 
 export function selos(jogo) {
   const etiqueta = novidade(jogo);
   return el('div', { class: 'selos' },
-    jogo.privado && !jogo.publicado ? el('span', { class: 'selo privado' }, icone('cadeado'), 'Privado') : null,
+    jogo.publicado === false ? el('span', { class: 'selo privado' }, icone('cadeado'), 'Privado') : null,
     etiqueta ? el('span', { class: `selo destaque-selo ${etiqueta === 'Novo' ? 'novo' : ''}` }, etiqueta) : null,
     jogavelNoBrowser(jogo) ? el('span', { class: 'selo' }, icone('browser'), 'Browser') : null,
     jogo.transferencias?.length ? el('span', { class: 'selo' }, icone('transferir'), 'Transferir') : null,
@@ -320,12 +319,57 @@ export async function transferirFicheiro(url, aoProgresso = () => {}) {
   const partes = (await getDocs(collection(bd, 'pacotes', id, 'partes'))).docs.sort((a, b) => a.id.localeCompare(b.id));
   if (!partes.length) throw new Error('Este ficheiro já não está disponível.');
   aoProgresso();
-  const blob = new Blob(partes.map((p) => p.data().dados.toUint8Array()), { type: 'application/octet-stream' });
-  const ligacao = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: decodeURIComponent(nome) });
+  entregarFicheiro(new Blob(partes.map((p) => p.data().dados.toUint8Array()), { type: 'application/octet-stream' }), decodeURIComponent(nome));
+}
+
+function entregarFicheiro(blob, nome) {
+  const ligacao = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: nome });
   document.body.append(ligacao);
   ligacao.click();
   ligacao.remove();
   setTimeout(() => URL.revokeObjectURL(ligacao.href), 60_000);
+}
+
+// Carrega a biblioteca de .zip só quando é precisa.
+function carregarFflate() {
+  if (window.fflate) return Promise.resolve(window.fflate);
+  return new Promise((resolver, rejeitar) => {
+    const script = Object.assign(document.createElement('script'), { src: '/vendor/fflate.js' });
+    script.onload = () => resolver(window.fflate);
+    script.onerror = () => rejeitar(new Error('Não foi possível preparar o .zip.'));
+    document.head.append(script);
+  });
+}
+
+// Transfere os ficheiros completos de um jogo (carregado no site ou da pasta do GitHub) num .zip.
+export async function transferirJogoCompleto(jogo, aoProgresso = () => {}) {
+  if (jogo.tipo === 'pacote') {
+    const partes = (await getDocs(collection(bd, 'pacotes', jogo.pacote.id, 'partes'))).docs.sort((a, b) => a.id.localeCompare(b.id));
+    if (!partes.length) throw new Error('Os ficheiros deste jogo já não estão disponíveis.');
+    entregarFicheiro(new Blob(partes.map((p) => p.data().dados.toUint8Array()), { type: 'application/zip' }), `${jogo.id}.zip`);
+    return;
+  }
+  if (jogo.tipo === 'repositorio') {
+    const indice = await (await fetch('/indice-repositorio.json', { cache: 'no-store' })).json();
+    const entrada = indice.jogos.find((j) => j.caminho === jogo.caminho);
+    if (!entrada?.ficheiros?.length) throw new Error('Não encontrei os ficheiros deste jogo no repositório.');
+    const fflate = await carregarFflate();
+    const ficheiros = {};
+    let feitos = 0;
+    for (const nome of entrada.ficheiros) {
+      const resposta = await fetch(`/jogos/${entrada.pasta}/${nome.split('/').map(encodeURIComponent).join('/')}`);
+      if (!resposta.ok) throw new Error(`Não foi possível obter ${nome}.`);
+      ficheiros[nome] = new Uint8Array(await resposta.arrayBuffer());
+      aoProgresso(++feitos, entrada.ficheiros.length);
+    }
+    entregarFicheiro(new Blob([fflate.zipSync(ficheiros, { level: 6 })], { type: 'application/zip' }), `${jogo.id}.zip`);
+    return;
+  }
+  if (jogo.tipo === 'ligacao') {
+    window.open(jogo.url_externo, '_blank', 'noopener');
+    return;
+  }
+  throw new Error('Este jogo só tem ficheiros para transferir (usa os botões de transferência).');
 }
 
 // Elimina um jogo e os ficheiros que foram carregados para ele.

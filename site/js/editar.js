@@ -215,11 +215,10 @@ function abrirTeste(url, titulo) {
   janela.showModal();
 }
 
-function escolhaVisibilidade(valor, titulo, descricao, nomeIcone, atual) {
-  return el('label', { class: 'escolha' },
+function escolhaVisibilidade(valor, titulo, nomeIcone, atual) {
+  return el('label', { class: 'opcao-segmentada' },
     el('input', { type: 'radio', name: 'visibilidade', value: valor, checked: valor === atual }),
-    el('strong', {}, icone(nomeIcone), titulo),
-    el('small', {}, descricao),
+    el('span', {}, icone(nomeIcone), titulo),
   );
 }
 
@@ -260,12 +259,10 @@ function formulario({ perfil, jogo, indice, todosJogos, categoriasUsadas, pacote
     }, c)));
   const descricao = el('textarea', { name: 'descricao', rows: '5', maxlength: '5000', placeholder: 'Do que trata o jogo? O que o torna divertido?' }, jogo?.descricao || '');
   const instrucoes = el('textarea', { name: 'instrucoes', rows: '3', maxlength: '2000', placeholder: 'Ex.: setas para mover, espaço para saltar.' }, jogo?.instrucoes || '');
-  // Visibilidade: público, rascunho (autores) ou privado (só administradores e o autor).
   const visibilidadeAtual = jogo ? estadoJogo(jogo) : 'publico';
-  const visibilidade = el('div', { class: 'escolhas', role: 'radiogroup', 'aria-label': 'Visibilidade' },
-    escolhaVisibilidade('publico', 'Público', 'Toda a gente vê e joga.', 'browser', visibilidadeAtual),
-    escolhaVisibilidade('rascunho', 'Rascunho', 'Só os autores da plataforma veem.', 'editar', visibilidadeAtual),
-    escolhaVisibilidade('privado', 'Privado', 'Só os administradores (e tu) veem.', 'cadeado', visibilidadeAtual),
+  const visibilidade = el('div', { class: 'segmentado', role: 'radiogroup', 'aria-label': 'Visibilidade' },
+    escolhaVisibilidade('publico', 'Público', 'browser', visibilidadeAtual),
+    escolhaVisibilidade('privado', 'Privado', 'cadeado', visibilidadeAtual),
   );
   const visibilidadeEscolhida = () => visibilidade.querySelector('input:checked').value;
 
@@ -716,7 +713,7 @@ function formulario({ perfil, jogo, indice, todosJogos, categoriasUsadas, pacote
         el('label', {}, el('span', {}, 'Como jogar ', el('span', { class: 'opcional' }, '(opcional)')), instrucoes),
       ),
       passo('3', editar ? 'Guardar' : 'Publicar',
-        el('div', { class: 'campo' }, el('span', {}, 'Quem pode ver?'), visibilidade),
+        el('div', { class: 'campo' }, el('span', {}, 'Visibilidade'), visibilidade),
         barra,
         botao,
       ),
@@ -781,7 +778,6 @@ try {
     const consultas = pode(perfil, 'admin')
       ? [getDocs(collection(bd, 'jogos'))]
       : [
-          getDocs(query(collection(bd, 'jogos'), where('privado', '==', false))),
           getDocs(query(collection(bd, 'jogos'), where('publicado', '==', true))),
           getDocs(query(collection(bd, 'jogos'), where('autor_uid', '==', perfil.uid))),
         ];

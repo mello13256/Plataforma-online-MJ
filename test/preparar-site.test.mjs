@@ -53,10 +53,13 @@ describe('preparar-site', () => {
 
   it('copia pastas e extrai .zip com nomes normalizados', () => {
     assert.deepEqual(indice.jogos, [
-      { pasta: 'aventura-no-algarve', origem: 'Aventura no Algarve.zip', caminho: 'jogos/aventura-no-algarve/build/index.html', capa: null },
+      {
+        pasta: 'aventura-no-algarve', origem: 'Aventura no Algarve.zip', caminho: 'jogos/aventura-no-algarve/build/index.html', capa: null,
+        ficheiros: ['build/index.html', 'build/jogo.wasm.br'],
+      },
       {
         pasta: 'pasta-normal', origem: 'Pasta Normal', caminho: 'jogos/pasta-normal/index.html', capa: 'jogos/pasta-normal/capa.png',
-        reservado_para: 'uid-do-dono',
+        reservado_para: 'uid-do-dono', ficheiros: ['capa.png', 'index.html'],
       },
     ]);
     assert.equal(fs.readFileSync(path.join(raiz, 'publicar/jogos/aventura-no-algarve/build/index.html'), 'utf8'), 'zip');

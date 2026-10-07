@@ -1,7 +1,7 @@
 import { bd, collection, criarConta, deleteDoc, doc, getDocs, setDoc, updateDoc } from './firebase.js';
 import {
   PERMISSOES, UID_DONO, capa, estadoJogo, seloEstado, carregarAutores, criarSlug, definirTitulo, el, eliminarJogo, exigirPerfil, formatarNumero, formatarTamanho, icone,
-  iniciais, mensagem, normalizar, paginaErro, pode, preencher, traduzirErro, vazio,
+  iniciais, mensagem, normalizar, paginaErro, transferirJogoCompleto, pode, preencher, traduzirErro, vazio,
 } from './comum.js';
 
 const conteudo = document.getElementById('conteudo');
@@ -60,7 +60,6 @@ function separadorJogos({ perfil, jogos, autores, aviso }) {
   const filtroEstado = el('select', { 'aria-label': 'Filtrar por estado', style: 'width:auto' },
     el('option', { value: '' }, 'Todos os estados'),
     el('option', { value: 'publico' }, 'Públicos'),
-    el('option', { value: 'rascunho' }, 'Rascunhos'),
     el('option', { value: 'privado' }, 'Privados'));
   const filtrar = () => {
     const termo = normalizar(filtro.value.trim());
@@ -92,6 +91,24 @@ function separadorJogos({ perfil, jogos, autores, aviso }) {
                 el('td', {}, formatarNumero(j.jogadas)),
                 el('td', { class: 'acoes-linha' },
                   pode(perfil, 'editar_todos') ? el('a', { class: 'botao pequeno secundario', href: `/editar?id=${j.id}` }, icone('editar'), 'Editar') : null,
+                  j.tipo !== 'nenhum'
+                    ? el('button', {
+                        type: 'button',
+                        class: 'botao pequeno secundario',
+                        title: 'Transferir o jogo completo',
+                        'aria-label': `Transferir ${j.titulo}`,
+                        onclick: async (evento) => {
+                          const botao = evento.currentTarget;
+                          botao.disabled = true;
+                          try {
+                            await transferirJogoCompleto(j);
+                          } catch (erro) {
+                            preencher(aviso, mensagem('erro-form', traduzirErro(erro)));
+                          }
+                          botao.disabled = false;
+                        },
+                      }, icone('transferir'))
+                    : null,
                   pode(perfil, 'eliminar_todos') ? el('button', { class: 'botao pequeno perigo', type: 'button', onclick: () => eliminar(j, linha) }, icone('lixo'), 'Remover') : null,
                 ),
               );
@@ -236,7 +253,6 @@ async function mostrar(perfil, separador = 'jogos', avisoInicial = null) {
     icone(nomeIcone), el('strong', {}, valor), el('span', {}, rotulo));
   const estatisticas = el('section', { class: 'painel-numeros' },
     cartaoNumero('comando', formatarNumero(jogos.filter((j) => j.publicado).length), ['jogos publicados',
-      jogos.some((j) => estadoJogo(j) === 'rascunho') ? ` · ${jogos.filter((j) => estadoJogo(j) === 'rascunho').length} rascunhos` : '',
       jogos.some((j) => estadoJogo(j) === 'privado') ? ` · ${jogos.filter((j) => estadoJogo(j) === 'privado').length} privados` : ''].join('')),
     cartaoNumero('jogar', formatarNumero(jogos.reduce((soma, j) => soma + (j.jogadas || 0), 0)), 'jogadas'),
     cartaoNumero('coracao', formatarNumero(jogos.reduce((soma, j) => soma + (j.gostos || 0), 0)), 'gostos'),
