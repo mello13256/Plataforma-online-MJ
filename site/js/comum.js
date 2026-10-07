@@ -214,7 +214,8 @@ export function jogavelNoBrowser(jogo) {
 export function urlJogo(jogo) {
   if (jogo.tipo === 'ligacao') return jogo.url_externo;
   if (jogo.tipo === 'pacote') return `/jogar/${jogo.pacote.id}/${jogo.pacote.entrada.split('/').map(encodeURIComponent).join('/')}`;
-  if (jogo.tipo === 'repositorio') return caminhoParaUrl(jogo.caminho);
+  // pasta com barra final: os ficheiros relativos do jogo (scripts, imagens…) resolvem-se dentro da pasta
+  if (jogo.tipo === 'repositorio') return caminhoParaUrl(jogo.caminho.replace(/(^|\/)index\.html?$/i, '$1'));
   return null;
 }
 

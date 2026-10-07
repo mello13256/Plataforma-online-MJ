@@ -1,0 +1,6 @@
+{
+  "explicacao": "Pastas de jogos reservadas: só a conta indicada (UID do Firebase) as pode publicar na plataforma. A mesma lista está em firestore.rules (função pastasReservadas), que é quem a faz cumprir.",
+  "pastas": {
+    "cinzas-de-valdoria": "PIgsxFjHYDc32oIqh5yD4g7uDmF3"
+  }
+}

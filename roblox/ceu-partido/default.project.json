@@ -1,0 +1,40 @@
+{
+  "name": "CeuPartido",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Compartilhado": { "$path": "src/compartilhado" }
+    },
+    "ServerScriptService": {
+      "Servidor": { "$path": "src/servidor" }
+    },
+    "StarterPlayer": {
+      "$properties": {
+        "GameSettingsAvatar": "R15",
+        "EnableMouseLockOption": false,
+        "CameraMaxZoomDistance": 40
+      },
+      "StarterPlayerScripts": {
+        "Cliente": { "$path": "src/cliente" }
+      },
+      "StarterCharacterScripts": { "$path": "src/personagem" }
+    },
+    "Lighting": {
+      "$properties": {
+        "Technology": "Future",
+        "ClockTime": 16.3,
+        "Brightness": 3,
+        "GlobalShadows": true
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "StreamingEnabled": false,
+        "FallenPartsDestroyHeight": -500
+      }
+    },
+    "Players": {
+      "$properties": { "CharacterAutoLoads": false }
+    }
+  }
+}

@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<script>
+  // Se o endereço vier sem a barra final (ex.: /jogos/cinzas-de-valdoria), os ficheiros do jogo seriam
+  // procurados na pasta de cima e o jogo ficava preso a carregar; a base corrige os caminhos relativos.
+  if (!/\/$|\.html?$/i.test(location.pathname)) document.write('<base href="' + location.pathname + '/">');
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Cinzas de Valdoria</title>
+<meta name="description" content="RPG de ação souls-like em 3D, de mundo aberto, para um jogador.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ouro: #d8c08a;
+    --ouro-escuro: #8a7448;
+    --texto: #e8e0cc;
+    --fundo-menu: rgba(10, 9, 8, 0.86);
+    --vida: #9c1c14;
+    --energia: #3f7a2c;
+    --serif: 'Cinzel', 'Trajan Pro', Georgia, 'Times New Roman', serif;
+    --corpo: 'EB Garamond', Garamond, Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; color: var(--texto); font-family: var(--corpo); user-select: none; -webkit-user-select: none; }
+  canvas#ecra { display: block; position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; }
+  .oculto { display: none !important; }
+  button { font: inherit; color: inherit; }
+
+  /* ---------- carregamento ---------- */
+  #carregamento { position: fixed; inset: 0; background: radial-gradient(ellipse at 50% 60%, #221a10 0%, #000 70%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 50; transition: opacity 1.2s; }
+  #carregamento h1, #titulo h1 { font-family: var(--serif); font-weight: 400; letter-spacing: 0.18em; color: var(--ouro); text-shadow: 0 0 30px rgba(216, 160, 70, 0.35); margin: 0; text-align: center; }
+  #carregamento h1 { font-size: clamp(28px, 5vw, 56px); }
+  .progresso { width: min(420px, 70vw); height: 2px; background: #2a2418; margin-top: 34px; }
+  .progresso div { height: 100%; width: 0; background: linear-gradient(90deg, #8a6a30, #f0d090); transition: width 0.25s; box-shadow: 0 0 10px #d8a050; }
+  #carregamento p { font-style: italic; color: #9a9080; margin-top: 18px; font-size: 17px; text-align: center; padding: 0 20px; }
+
+  /* ---------- título ---------- */
+  #titulo { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: space-between; z-index: 40; background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 35%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.85) 100%); padding: 10vh 20px 8vh; transition: opacity 1s; }
+  #titulo h1 { font-size: clamp(34px, 7vw, 92px); }
+  #titulo .sub { font-family: var(--serif); letter-spacing: 0.5em; color: #b8a888; font-size: clamp(11px, 1.4vw, 15px); margin-top: 10px; text-align: center; }
+  .menu-lista { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .menu-lista button { background: none; border: 0; font-family: var(--serif); font-size: clamp(16px, 2.1vw, 22px); letter-spacing: 0.12em; color: #c8bea8; padding: 8px 28px; cursor: pointer; position: relative; transition: color 0.2s, text-shadow 0.2s; }
+  .menu-lista button:hover, .menu-lista button:focus-visible, .menu-lista button.sel { color: #fff4d8; text-shadow: 0 0 14px rgba(255, 210, 140, 0.7); outline: none; }
+  .menu-lista button:hover::before, .menu-lista button.sel::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 26px; transform: translateY(-50%); background: radial-gradient(ellipse at center, rgba(255, 200, 120, 0.16), transparent 70%); }
+  .menu-lista button:disabled { opacity: 0.35; cursor: default; text-shadow: none; }
+  .rodape-titulo { font-size: 14px; color: #8a8070; text-align: center; font-style: italic; }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+  #barras { position: absolute; left: 34px; top: 30px; }
+  .barra { height: 9px; background: rgba(0,0,0,0.6); border: 1px solid #5a5040; margin-bottom: 5px; position: relative; box-shadow: 0 0 0 1px rgba(0,0,0,0.6); transition: width 0.4s; }
+  .barra .perda { position: absolute; inset: 0; width: 100%; background: #e8d8a0; transform-origin: left; }
+  .barra .valor { position: absolute; inset: 0; transform-origin: left; }
+  .barra.hp .valor { background: linear-gradient(180deg, #c42a1e, #7a120c); }
+  .barra.en .valor { background: linear-gradient(180deg, #5c9a40, #2c5a1c); }
+  #frasco { position: absolute; left: 34px; bottom: 38px; display: flex; align-items: flex-end; gap: 46px; }
+  .slot { width: 64px; height: 64px; border: 1px solid #6a5c40; background: radial-gradient(circle at 50% 40%, rgba(50,40,28,0.75), rgba(0,0,0,0.8)); display: flex; align-items: center; justify-content: center; position: relative; box-shadow: inset 0 0 12px #000; }
+  .slot .num { position: absolute; right: 4px; bottom: 1px; font-family: var(--serif); font-size: 17px; color: #fff; text-shadow: 0 0 4px #000, 0 0 2px #000; }
+  .slot .etq { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); margin-top: 3px; font-size: 14px; white-space: nowrap; color: #c8bca0; text-shadow: 0 0 4px #000; }
+  .icone-frasco { width: 22px; height: 34px; border-radius: 40% 40% 45% 45% / 30% 30% 60% 60%; background: radial-gradient(circle at 40% 60%, #ffd080, #e06a10 60%, #6a2a08); box-shadow: 0 0 14px rgba(255, 140, 40, 0.8); position: relative; }
+  .icone-frasco::before { content: ''; position: absolute; left: 7px; top: -7px; width: 8px; height: 8px; background: #6a5a48; border-radius: 2px; }
+  .icone-frasco.vazio { background: radial-gradient(circle at 40% 60%, #5a5048, #2a2420); box-shadow: none; }
+  .icone-arma { width: 6px; height: 42px; background: linear-gradient(90deg, #8a8680, #e0ddd8, #8a8680); transform: rotate(35deg); position: relative; }
+  .icone-arma::after { content: ''; position: absolute; left: -9px; bottom: 8px; width: 24px; height: 4px; background: #5a4a38; }
+  #almas { position: absolute; right: 38px; bottom: 34px; font-family: var(--serif); font-size: 22px; color: #f0e6d0; text-shadow: 0 0 6px #000; display: flex; align-items: center; gap: 12px; padding: 6px 16px 6px 12px; background: linear-gradient(90deg, transparent, rgba(0,0,0,0.65)); border-bottom: 1px solid rgba(160, 140, 100, 0.4); }
+  #almas .ganho { font-size: 15px; color: #c8d8ff; opacity: 0; transition: opacity 0.3s; }
+  .icone-alma { width: 16px; height: 16px; border-radius: 50%; background: radial-gradient(circle, #fff, #a8c0ff 40%, transparent 70%); box-shadow: 0 0 12px #a8c0ff; }
+  #chefe { position: absolute; left: 50%; bottom: 13vh; transform: translateX(-50%); width: min(820px, 80vw); opacity: 0; transition: opacity 1s; }
+  #chefe.visivel { opacity: 1; }
+  #chefe .nome { font-family: var(--serif); font-size: 18px; letter-spacing: 0.06em; text-shadow: 0 0 6px #000; margin-bottom: 4px; display: flex; justify-content: space-between; }
+  #chefe .nome span:last-child { color: #e8d8a8; font-size: 15px; }
+  #chefe .barra { height: 11px; }
+  #chefe .barra .valor { background: linear-gradient(180deg, #a8241a, #5c0e08); }
+  #interacao { position: absolute; left: 50%; bottom: 26vh; transform: translateX(-50%); background: linear-gradient(90deg, transparent, rgba(0,0,0,0.75) 15%, rgba(0,0,0,0.75) 85%, transparent); padding: 10px 70px; font-size: 19px; display: flex; align-items: center; gap: 12px; white-space: nowrap; }
+  .tecla { display: inline-flex; min-width: 26px; height: 26px; padding: 0 6px; align-items: center; justify-content: center; border: 1px solid #a89878; border-radius: 4px; font-family: var(--serif); font-size: 14px; color: #f0e0c0; background: rgba(40, 32, 22, 0.8); }
+  #aviso { position: absolute; left: 50%; top: 12vh; transform: translateX(-50%); font-size: 21px; text-shadow: 0 0 8px #000, 0 0 3px #000; opacity: 0; transition: opacity 0.4s; text-align: center; white-space: nowrap; }
+  #area { position: absolute; left: 50%; top: 32vh; transform: translateX(-50%); text-align: center; opacity: 0; transition: opacity 1.4s; }
+  #area .linha { width: min(560px, 80vw); height: 1px; margin: 8px auto; background: linear-gradient(90deg, transparent, var(--ouro), transparent); }
+  #area .nome { font-family: var(--serif); font-size: clamp(24px, 3.4vw, 40px); letter-spacing: 0.12em; color: #f4ead4; text-shadow: 0 0 18px rgba(0,0,0,0.9); }
+  #ponto { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: rgba(240, 226, 192, 0.75); box-shadow: 0 0 3px rgba(0,0,0,0.8); opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+  #ponto.visivel { opacity: 1; }
+  #mira { position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: radial-gradient(circle, #fff 0%, #fff 30%, rgba(255,255,255,0.15) 60%, transparent 70%); box-shadow: 0 0 8px #fff; display: none; }
+  .barra-inimigo { position: absolute; width: 90px; height: 5px; margin-left: -45px; background: rgba(0,0,0,0.6); border: 1px solid rgba(80,70,60,0.8); display: none; }
+  .barra-inimigo .v { position: absolute; inset: 0; background: #a02018; transform-origin: left; }
+  .barra-inimigo .p { position: absolute; inset: 0; background: #e8d8a0; transform-origin: left; }
+  .barra-inimigo .d { position: absolute; left: 100%; top: -9px; margin-left: 6px; font-size: 14px; color: #f0e8d0; text-shadow: 0 0 3px #000; }
+  #bussola { position: absolute; left: 50%; top: 20px; transform: translateX(-50%); width: min(460px, 60vw); height: 26px; overflow: hidden; mask-image: linear-gradient(90deg, transparent, #000 25%, #000 75%, transparent); -webkit-mask-image: linear-gradient(90deg, transparent, #000 25%, #000 75%, transparent); }
+  #bussola .faixa { position: absolute; top: 0; height: 100%; white-space: nowrap; font-family: var(--serif); font-size: 13px; color: #d8ccb0; text-shadow: 0 0 4px #000; }
+  #bussola .faixa span { position: absolute; top: 4px; transform: translateX(-50%); }
+  #bussola .marca { position: absolute; left: 50%; top: 0; width: 1px; height: 8px; background: var(--ouro); }
+
+  /* ---------- ecrãs grandes ---------- */
+  .ecra-texto { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 20; opacity: 0; transition: opacity 1.6s; }
+  .ecra-texto .faixa { width: 100%; padding: 26px 0; text-align: center; background: linear-gradient(180deg, transparent, rgba(0,0,0,0.78) 25%, rgba(0,0,0,0.78) 75%, transparent); }
+  .ecra-texto h2 { margin: 0; font-family: var(--serif); font-weight: 400; letter-spacing: 0.08em; font-size: clamp(40px, 7vw, 92px); }
+  #ecra-morte h2 { color: #8a1410; text-shadow: 0 0 30px rgba(140, 20, 10, 0.6); transform: scale(1.06); }
+  #ecra-vitoria h2 { color: #e8c870; text-shadow: 0 0 30px rgba(230, 180, 80, 0.6); }
+  #ecra-vitoria p, #ecra-fogueira p { margin: 8px 0 0; font-size: 18px; color: #c8bca0; }
+  #ecra-fogueira h2 { color: #f0c070; text-shadow: 0 0 26px rgba(255, 160, 60, 0.6); font-size: clamp(30px, 5vw, 64px); }
+  body.vinheta-css #vinheta { position: fixed; inset: 0; pointer-events: none; z-index: 1; background: radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.5) 100%); }
+  #perigo { position: fixed; inset: 0; pointer-events: none; z-index: 2; opacity: 0; background: radial-gradient(ellipse at center, transparent 40%, rgba(120,0,0,0.55) 100%); }
+  #fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 30; transition: opacity 1s; }
+
+  /* ---------- painéis / menus ---------- */
+  .painel { position: fixed; z-index: 25; background: var(--fundo-menu); border: 1px solid #4a4030; box-shadow: 0 0 60px rgba(0,0,0,0.8), inset 0 0 40px rgba(0,0,0,0.6); padding: 26px 32px; color: var(--texto); }
+  .painel h3 { margin: 0 0 16px; font-family: var(--serif); font-weight: 400; letter-spacing: 0.12em; color: var(--ouro); font-size: 22px; border-bottom: 1px solid #4a4030; padding-bottom: 10px; }
+  .centro { left: 50%; top: 50%; transform: translate(-50%, -50%); }
+  #menu-fogueira { left: 6vw; top: 50%; transform: translateY(-50%); min-width: 300px; }
+  #menu-fogueira .menu-lista { align-items: flex-start; }
+  #menu-fogueira .menu-lista button { padding-left: 4px; }
+  #menu-nivel { width: min(560px, 92vw); }
+  .linha-atrib { display: grid; grid-template-columns: 1fr 60px 40px; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid rgba(90, 80, 60, 0.35); font-size: 19px; }
+  .linha-atrib .val { text-align: right; font-family: var(--serif); }
+  .linha-atrib button, .botao { background: rgba(60, 50, 34, 0.7); border: 1px solid #8a7448; color: #f0e0c0; cursor: pointer; padding: 4px 10px; font-family: var(--serif); pointer-events: auto; }
+  .linha-atrib button:hover, .botao:hover { background: rgba(120, 96, 56, 0.8); }
+  .linha-atrib button:disabled { opacity: 0.3; cursor: default; }
+  .info-nivel { display: grid; grid-template-columns: 1fr auto; gap: 4px 20px; font-size: 18px; margin: 14px 0; color: #c8bca0; }
+  .info-nivel b { font-family: var(--serif); font-weight: 400; color: #fff; text-align: right; }
+  .acoes { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+  #menu-viajar .menu-lista { align-items: stretch; }
+  #menu-viajar .menu-lista button { text-align: left; }
+  #mensagem-ler { width: min(560px, 90vw); text-align: center; background: linear-gradient(180deg, rgba(40, 24, 12, 0.92), rgba(16, 10, 6, 0.95)); border-color: #8a5a28; }
+  #mensagem-ler p { font-size: 23px; font-style: italic; line-height: 1.45; color: #f8e0b8; margin: 4px 0 14px; text-shadow: 0 0 12px rgba(255, 140, 40, 0.4); }
+  #menu-mapa { inset: 4vh 4vw; display: flex; gap: 20px; padding: 18px; }
+  #mapa-area { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; min-width: 0; }
+  #mapa-cv { max-width: 100%; max-height: 100%; aspect-ratio: 1; border: 1px solid #6a5a3a; box-shadow: 0 0 40px #000; }
+  #mapa-lado { width: 260px; font-size: 17px; overflow: auto; }
+  #mapa-lado .leg { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
+  .ponto { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+  #controlos { width: min(720px, 94vw); max-height: 90vh; overflow: auto; }
+  #controlos table { width: 100%; border-collapse: collapse; font-size: 17px; }
+  #controlos td { padding: 5px 8px; border-bottom: 1px solid rgba(90, 80, 60, 0.3); }
+  #controlos td:not(:first-child) { color: #e0d4b8; white-space: nowrap; }
+  #controlos th { text-align: left; padding: 6px 8px; font-family: var(--serif); font-weight: 400; color: var(--ouro); }
+  #opcoes { width: min(520px, 94vw); }
+  .opcao { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid rgba(90, 80, 60, 0.3); font-size: 18px; gap: 16px; }
+  .opcao input[type=range] { width: 180px; accent-color: #c8a060; }
+  .opcao select { background: #1a1612; color: var(--texto); border: 1px solid #6a5a3a; padding: 4px 8px; font: inherit; }
+  .nota { font-size: 14px; color: #9a9080; font-style: italic; }
+  #clique { position: fixed; inset: 0; z-index: 22; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.35); font-family: var(--serif); letter-spacing: 0.1em; font-size: 20px; color: #e8dcc0; cursor: pointer; text-shadow: 0 0 8px #000; }
+  .painel, .painel * { pointer-events: auto; }
+
+  /* ---------- toque ---------- */
+  #toque-ui { display: none; }
+  body.toque #toque-ui.ativo { display: block; }
+  #zona-toque { position: fixed; inset: 0; z-index: 5; touch-action: none; }
+  #joy-base { position: fixed; width: 120px; height: 120px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.25); background: rgba(0,0,0,0.2); display: none; z-index: 6; pointer-events: none; }
+  #joy-pega { position: absolute; left: 35px; top: 35px; width: 50px; height: 50px; border-radius: 50%; background: rgba(255,255,255,0.3); }
+  .bt { position: fixed; z-index: 7; width: 62px; height: 62px; border-radius: 50%; border: 1px solid rgba(220, 200, 160, 0.5); background: rgba(20, 16, 12, 0.45); color: #f0e0c0; font-family: var(--serif); font-size: 12px; display: flex; align-items: center; justify-content: center; text-align: center; touch-action: none; }
+  .bt.ativo { background: rgba(200, 160, 100, 0.45); }
+  .bt.g { width: 78px; height: 78px; font-size: 14px; }
+  body.toque #barras { left: 16px; top: 14px; }
+  body.toque #frasco { left: 16px; bottom: auto; top: 64px; transform: scale(0.7); transform-origin: left top; }
+  body.toque #almas { bottom: auto; top: 14px; right: 16px; font-size: 18px; }
+  body.toque #bussola { display: none; }
+  #botao-menu-toque { position: fixed; z-index: 8; right: 16px; top: 60px; display: none; }
+  body.toque #botao-menu-toque { display: block; }
+</style>
+</head>
+<body>
+<canvas id="ecra"></canvas>
+
+<div id="carregamento">
+  <h1>CINZAS DE VALDORIA</h1>
+  <div class="progresso"><div id="prog"></div></div>
+  <p id="dica">A acender as fogueiras…</p>
+</div>
+
+<div id="titulo" class="oculto">
+  <div>
+    <h1>CINZAS DE VALDORIA</h1>
+    <div class="sub">O TRONO CAÍDO</div>
+  </div>
+  <div class="menu-lista" id="menu-titulo">
+    <button id="bt-continuar">Continuar</button>
+    <button id="bt-novo">Novo jogo</button>
+    <button id="bt-controlos-t">Controlos</button>
+    <button id="bt-opcoes-t">Opções</button>
+  </div>
+  <div class="rodape-titulo">Um jogo para um jogador · Mundo aberto · Feito com amor e cinzas</div>
+</div>
+
+<div id="hud" class="oculto">
+  <div id="bussola"><div class="faixa" id="bussola-faixa"></div><div class="marca"></div></div>
+  <div id="barras">
+    <div class="barra hp" id="b-hp"><div class="perda"></div><div class="valor"></div></div>
+    <div class="barra en" id="b-en"><div class="valor"></div></div>
+  </div>
+  <div id="frasco">
+    <div class="slot"><div class="icone-frasco" id="ic-frasco"></div><span class="num" id="n-frasco">3</span><span class="etq">Frasco de Cinza</span></div>
+    <div class="slot"><div class="icone-arma"></div><span class="etq" id="nome-arma">Espada Longa</span></div>
+  </div>
+  <div id="almas"><span class="ganho" id="almas-ganho"></span><div class="icone-alma"></div><span id="n-almas">0</span></div>
+  <div id="chefe"><div class="nome"><span id="chefe-nome"></span><span id="chefe-dano"></span></div><div class="barra"><div class="perda"></div><div class="valor"></div></div></div>
+  <div id="interacao" class="oculto"><span class="tecla" id="tecla-int">E</span><span id="texto-int"></span></div>
+  <div id="aviso"></div>
+  <div id="area"><div class="linha"></div><div class="nome" id="area-nome"></div><div class="linha"></div></div>
+  <div id="mira"></div>
+  <div id="ponto"></div>
+  <div id="barras-inimigos"></div>
+</div>
+
+<div id="ecra-morte" class="ecra-texto"><div class="faixa"><h2>MORRESTE</h2></div></div>
+<div id="ecra-vitoria" class="ecra-texto"><div class="faixa"><h2 id="vitoria-titulo">GRANDE INIMIGO ABATIDO</h2><p id="vitoria-sub"></p></div></div>
+<div id="ecra-fogueira" class="ecra-texto"><div class="faixa"><h2>FOGUEIRA ACESA</h2><p id="fogueira-nome"></p></div></div>
+<div id="vinheta"></div>
+<div id="perigo"></div>
+<div id="fade"></div>
+
+<div id="menu-fogueira" class="painel oculto">
+  <h3 id="fogueira-titulo">Fogueira</h3>
+  <div class="menu-lista">
+    <button id="bt-nivel">Subir de nível</button>
+    <button id="bt-viajar">Viajar</button>
+    <button id="bt-sair-fogueira">Partir</button>
+  </div>
+</div>
+
+<div id="menu-viajar" class="painel centro oculto">
+  <h3>Viajar para…</h3>
+  <div class="menu-lista" id="lista-viajar"></div>
+  <div class="acoes"><button class="botao" id="bt-fechar-viajar">Voltar</button></div>
+</div>
+
+<div id="menu-nivel" class="painel centro oculto">
+  <h3>Subir de nível</h3>
+  <div class="info-nivel">
+    <span>Nível</span><b id="nv-nivel">1</b>
+    <span>Almas</span><b id="nv-almas">0</b>
+    <span>Almas necessárias</span><b id="nv-custo">0</b>
+  </div>
+  <div id="lista-atrib"></div>
+  <div class="info-nivel">
+    <span>Vida máxima</span><b id="nv-hp">0</b>
+    <span>Energia máxima</span><b id="nv-en">0</b>
+    <span>Dano da arma</span><b id="nv-dano">0</b>
+  </div>
+  <div class="acoes"><button class="botao" id="bt-fechar-nivel">Voltar</button></div>
+</div>
+
+<div id="mensagem-ler" class="painel centro oculto">
+  <h3>Mensagem gravada no chão</h3>
+  <p id="mensagem-texto"></p>
+  <div class="acoes" style="justify-content:center"><button class="botao" id="bt-fechar-msg">Fechar</button></div>
+</div>
+
+<div id="menu-mapa" class="painel oculto">
+  <div id="mapa-area"><canvas id="mapa-cv" width="900" height="900"></canvas></div>
+  <div id="mapa-lado">
+    <h3>Valdoria</h3>
+    <div class="leg"><span class="ponto" style="background:#fff;box-shadow:0 0 6px #fff"></span> Tu</div>
+    <div class="leg"><span class="ponto" style="background:#ff9a3a;box-shadow:0 0 6px #ff9a3a"></span> Fogueira acesa</div>
+    <div class="leg"><span class="ponto" style="background:#6a5a4a"></span> Fogueira por descobrir</div>
+    <div class="leg"><span class="ponto" style="background:#9adf8a;box-shadow:0 0 6px #9adf8a"></span> Almas perdidas</div>
+    <div class="leg"><span class="ponto" style="background:#c02818"></span> Grande inimigo</div>
+    <p class="nota">As fogueiras acesas permitem viajar quando descansas junto a uma delas.</p>
+    <div class="acoes"><button class="botao" id="bt-fechar-mapa">Fechar (M)</button></div>
+  </div>
+</div>
+
+<div id="menu-pausa" class="painel centro oculto">
+  <h3>Pausa</h3>
+  <div class="menu-lista">
+    <button id="bt-retomar">Continuar</button>
+    <button id="bt-mapa-p">Mapa</button>
+    <button id="bt-controlos-p">Controlos</button>
+    <button id="bt-opcoes-p">Opções</button>
+    <button id="bt-sair-titulo">Sair para o título</button>
+  </div>
+</div>
+
+<div id="controlos" class="painel centro oculto">
+  <h3>Controlos</h3>
+  <table>
+    <tr><th>Ação</th><th>Teclado e rato</th><th>Comando</th></tr>
+    <tr><td>Mover</td><td>W A S D</td><td>Manípulo esquerdo</td></tr>
+    <tr><td>Câmara</td><td>Rato</td><td>Manípulo direito</td></tr>
+    <tr><td>Correr</td><td>Shift (manter)</td><td>B / ○ (manter)</td></tr>
+    <tr><td>Rolar / esquivar</td><td>Espaço</td><td>B / ○ (tocar)</td></tr>
+    <tr><td>Ataque leve</td><td>Botão esquerdo</td><td>RB / R1</td></tr>
+    <tr><td>Ataque forte</td><td>F</td><td>RT / R2</td></tr>
+    <tr><td>Bloquear</td><td>Botão direito (manter)</td><td>LB / L1</td></tr>
+    <tr><td>Fixar alvo</td><td>Q ou botão do meio</td><td>R3</td></tr>
+    <tr><td>Trocar de alvo</td><td>Roda do rato</td><td>Manípulo direito</td></tr>
+    <tr><td>Beber do frasco</td><td>R</td><td>X / □</td></tr>
+    <tr><td>Interagir</td><td>E</td><td>A / ✕</td></tr>
+    <tr><td>Trocar de arma</td><td>X</td><td>Y / △</td></tr>
+    <tr><td>Andar devagar</td><td>C (manter)</td><td>Inclinar pouco</td></tr>
+    <tr><td>Mapa</td><td>M</td><td>Select</td></tr>
+    <tr><td>Pausa</td><td>Esc ou P</td><td>Start</td></tr>
+  </table>
+  <p class="nota">Dica: rolar torna-te invulnerável por um instante. Bloquear gasta energia. Descansar numa fogueira enche o frasco — e faz regressar os inimigos.</p>
+  <div class="acoes"><button class="botao" id="bt-fechar-controlos">Voltar</button></div>
+</div>
+
+<div id="opcoes" class="painel centro oculto">
+  <h3>Opções</h3>
+  <div class="opcao"><span>Câmara</span><select id="op-camara"><option value="primeira">Primeira pessoa</option><option value="terceira">Terceira pessoa</option></select></div>
+  <div class="opcao"><span>Qualidade gráfica</span><select id="op-qualidade"><option value="baixa">Baixa</option><option value="media">Média</option><option value="alta">Alta</option></select></div>
+  <div class="opcao"><span>Distância de detalhe <small id="val-detalhe" style="opacity:.7"></small></span><input type="range" id="op-detalhe" min="0.5" max="1.6" step="0.1"></div>
+  <div class="opcao"><span>Sensibilidade da câmara</span><input type="range" id="op-sens" min="0.3" max="2.5" step="0.05"></div>
+  <div class="opcao"><span>Volume</span><input type="range" id="op-volume" min="0" max="1" step="0.05"></div>
+  <div class="opcao"><span>Inverter eixo vertical</span><input type="checkbox" id="op-inverter"></div>
+  <div class="opcao"><span>Mostrar FPS</span><input type="checkbox" id="op-fps"></div>
+  <p class="nota">Distância de detalhe: até onde árvores, vegetação, sombras e inimigos ficam com a qualidade máxima — mais longe do jogador a qualidade baixa. Mais curta = mais FPS.</p>
+  <p class="nota" id="nota-qualidade">Mudar a qualidade recarrega o jogo (o progresso guardado mantém-se).</p>
+  <div class="acoes"><button class="botao" id="bt-fechar-opcoes">Voltar</button></div>
+</div>
+
+<div id="clique" class="oculto">Clica para continuar</div>
+<div id="fps" style="position:fixed;right:8px;top:6px;z-index:60;font:12px monospace;color:#9f9;display:none"></div>
+
+<div id="toque-ui">
+  <div id="zona-toque"></div>
+  <div id="joy-base"><div id="joy-pega"></div></div>
+  <div class="bt g" data-acao="ataque" style="right:96px;bottom:40px">Atacar</div>
+  <div class="bt" data-acao="forte" style="right:24px;bottom:120px">Forte</div>
+  <div class="bt" data-acao="rolar" style="right:24px;bottom:40px">Rolar</div>
+  <div class="bt" data-acao="bloquear" style="right:180px;bottom:30px">Escudo</div>
+  <div class="bt" data-acao="alvo" style="right:110px;bottom:140px">Alvo</div>
+  <div class="bt" data-acao="frasco" style="right:190px;bottom:110px">Frasco</div>
+  <div class="bt" data-acao="interagir" style="right:24px;bottom:200px">Usar</div>
+  <div class="bt" data-acao="correr" style="left:24px;bottom:30px">Correr</div>
+</div>
+<button id="botao-menu-toque" class="botao">☰</button>
+
+<script type="module" src="js/principal.js"></script>
+</body>
+</html>

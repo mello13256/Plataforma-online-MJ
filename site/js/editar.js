@@ -786,6 +786,8 @@ try {
           getDocs(query(collection(bd, 'jogos'), where('autor_uid', '==', perfil.uid))),
         ];
     const [indice, ...resultados] = await Promise.all([lerIndiceRepositorio(), ...consultas]);
+    // pastas reservadas a outra conta não aparecem (as regras da base de dados também as recusam)
+    indice.jogos = indice.jogos.filter((j) => !j.reservado_para || j.reservado_para === perfil.uid);
     const porId = new Map(resultados.flatMap((r) => r.docs).map((d) => [d.id, { id: d.id, ...d.data() }]));
     const todosJogos = [...porId.values()];
     const categoriasUsadas = [...new Set(todosJogos.map((j) => j.categoria))];
