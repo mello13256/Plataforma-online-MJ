@@ -330,6 +330,9 @@ img.leitor-fundo { filter: brightness(.55) saturate(1.1); }
 .estado.publico { background: var(--verde-suave); color: var(--verde); }
 .estado.rascunho { background: var(--amarelo-suave); color: var(--amarelo); }
 .estado.dono { background: var(--destaque-suave); color: var(--destaque); }
+.estado.privado { display: inline-flex; align-items: center; gap: .3rem; background: var(--superficie-2); color: var(--texto); border: 1px solid var(--borda); }
+.estado .icone { width: .95em; height: .95em; }
+.selo.privado { background: #111; }
 .permissoes-linha { display: flex; flex-wrap: wrap; gap: .4rem .9rem; }
 .permissoes-linha label { display: inline-flex; gap: .4rem; align-items: center; font-size: .9rem; white-space: nowrap; }
 .grelha-permissoes { display: grid; gap: .6rem; }

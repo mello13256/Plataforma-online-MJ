@@ -1,8 +1,8 @@
 import {
-  Bytes, bd, collection, deleteDoc, doc, getDoc, getDocs, runTransaction, serverTimestamp, setDoc, updateDoc,
+  Bytes, bd, collection, deleteDoc, doc, getDoc, getDocs, query, runTransaction, serverTimestamp, setDoc, updateDoc, where,
 } from './firebase.js';
 import {
-  CATEGORIAS, REPOSITORIO, apagarPacote, capa, criarSlug, definirTitulo, el, exigirPerfil, formatarTamanho, icone,
+  CATEGORIAS, REPOSITORIO, apagarPacote, capa, estadoJogo, criarSlug, definirTitulo, el, exigirPerfil, formatarTamanho, icone,
   mensagem, paginaErro, pacotesDoJogo, pode, preencher, prepararServiceWorker, selos, traduzirErro, urlCapa, urlJogo,
 } from './comum.js';
 
@@ -182,11 +182,17 @@ async function criarDocumentoJogo(perfil, dados) {
   for (let n = 1; n < 100; n++) {
     const slug = n === 1 ? base : `${base}-${n}`;
     const ref = doc(bd, 'jogos', slug);
-    const criado = await runTransaction(bd, async (transacao) => {
-      if ((await transacao.get(ref)).exists()) return false;
-      transacao.set(ref, { ...dados, jogadas: 0, autor_uid: perfil.uid, criado_em: serverTimestamp() });
-      return true;
-    });
+    let criado = false;
+    try {
+      criado = await runTransaction(bd, async (transacao) => {
+        if ((await transacao.get(ref)).exists()) return false;
+        transacao.set(ref, { ...dados, jogadas: 0, autor_uid: perfil.uid, criado_em: serverTimestamp() });
+        return true;
+      });
+    } catch (erro) {
+      // Endereço ocupado por um jogo privado de outra pessoa: tentar o seguinte.
+      if (erro.code !== 'permission-denied') throw erro;
+    }
     if (criado) return slug;
   }
   throw new Error('Não foi possível criar um endereço único para o jogo.');
@@ -207,6 +213,14 @@ function abrirTeste(url, titulo) {
   janela.addEventListener('close', () => janela.remove());
   document.body.append(janela);
   janela.showModal();
+}
+
+function escolhaVisibilidade(valor, titulo, descricao, nomeIcone, atual) {
+  return el('label', { class: 'escolha' },
+    el('input', { type: 'radio', name: 'visibilidade', value: valor, checked: valor === atual }),
+    el('strong', {}, icone(nomeIcone), titulo),
+    el('small', {}, descricao),
+  );
 }
 
 // ------------------------------------------------------------- Formulário
@@ -246,7 +260,14 @@ function formulario({ perfil, jogo, indice, todosJogos, categoriasUsadas, pacote
     }, c)));
   const descricao = el('textarea', { name: 'descricao', rows: '5', maxlength: '5000', placeholder: 'Do que trata o jogo? O que o torna divertido?' }, jogo?.descricao || '');
   const instrucoes = el('textarea', { name: 'instrucoes', rows: '3', maxlength: '2000', placeholder: 'Ex.: setas para mover, espaço para saltar.' }, jogo?.instrucoes || '');
-  const publicado = el('input', { type: 'checkbox', name: 'publicado', checked: jogo ? jogo.publicado : true });
+  // Visibilidade: público, rascunho (autores) ou privado (só administradores e o autor).
+  const visibilidadeAtual = jogo ? estadoJogo(jogo) : 'publico';
+  const visibilidade = el('div', { class: 'escolhas', role: 'radiogroup', 'aria-label': 'Visibilidade' },
+    escolhaVisibilidade('publico', 'Público', 'Toda a gente vê e joga.', 'browser', visibilidadeAtual),
+    escolhaVisibilidade('rascunho', 'Rascunho', 'Só os autores da plataforma veem.', 'editar', visibilidadeAtual),
+    escolhaVisibilidade('privado', 'Privado', 'Só os administradores (e tu) veem.', 'cadeado', visibilidadeAtual),
+  );
+  const visibilidadeEscolhida = () => visibilidade.querySelector('input:checked').value;
 
   // --- Pré-visualização (coluna da direita)
   const previa = el('div');
@@ -640,7 +661,8 @@ function formulario({ perfil, jogo, indice, todosJogos, categoriasUsadas, pacote
           rotulo: t.rotulo.value.trim() || 'Transferir',
           url: t.urlExistente || validarUrl(t.url.value.trim()),
         })),
-        publicado: publicado.checked,
+        publicado: visibilidadeEscolhida() === 'publico',
+        privado: visibilidadeEscolhida() === 'privado',
         atualizado_em: serverTimestamp(),
       };
       let slug = jogo?.id;
@@ -694,7 +716,7 @@ function formulario({ perfil, jogo, indice, todosJogos, categoriasUsadas, pacote
         el('label', {}, el('span', {}, 'Como jogar ', el('span', { class: 'opcional' }, '(opcional)')), instrucoes),
       ),
       passo('3', editar ? 'Guardar' : 'Publicar',
-        el('label', { class: 'opcao' }, publicado, el('span', {}, el('strong', {}, 'Visível para todos'), el('br'), el('small', { class: 'ajuda' }, 'Desmarca para guardar como rascunho (só os autores o veem).'))),
+        el('div', { class: 'campo' }, el('span', {}, 'Quem pode ver?'), visibilidade),
         barra,
         botao,
       ),
@@ -756,15 +778,23 @@ window.addEventListener('drop', (e) => e.preventDefault());
 try {
   const perfil = await exigirPerfil(conteudo);
   if (perfil) {
-    const [indice, resultado] = await Promise.all([lerIndiceRepositorio(), getDocs(collection(bd, 'jogos'))]);
-    const todosJogos = resultado.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const consultas = pode(perfil, 'admin')
+      ? [getDocs(collection(bd, 'jogos'))]
+      : [
+          getDocs(query(collection(bd, 'jogos'), where('privado', '==', false))),
+          getDocs(query(collection(bd, 'jogos'), where('publicado', '==', true))),
+          getDocs(query(collection(bd, 'jogos'), where('autor_uid', '==', perfil.uid))),
+        ];
+    const [indice, ...resultados] = await Promise.all([lerIndiceRepositorio(), ...consultas]);
+    const porId = new Map(resultados.flatMap((r) => r.docs).map((d) => [d.id, { id: d.id, ...d.data() }]));
+    const todosJogos = [...porId.values()];
     const categoriasUsadas = [...new Set(todosJogos.map((j) => j.categoria))];
     let jogo = null;
     let pacoteAtual = null;
     let imagensAtuais = [];
     if (id) {
-      const documento = await getDoc(doc(bd, 'jogos', id));
-      const dados = documento.exists() ? documento.data() : null;
+      const documento = await getDoc(doc(bd, 'jogos', id)).catch(() => null);
+      const dados = documento?.exists() ? documento.data() : null;
       const permitido = dados && ((dados.autor_uid === perfil.uid && pode(perfil, 'publicar')) || pode(perfil, 'editar_todos'));
       if (permitido) jogo = { id: documento.id, ...dados };
       if (jogo) {

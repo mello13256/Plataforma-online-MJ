@@ -41,6 +41,7 @@ const ICONES = {
   certo: '<path d="M20 6L9 17l-5-5"/>',
   seta: '<path d="M19 12H5M12 19l-7-7 7-7"/>',
   estrela: '<path d="M12 2l3 6.9 7.5.7-5.7 5 1.7 7.4L12 18l-6.5 4 1.7-7.4-5.7-5 7.5-.7z"/>',
+  cadeado: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   coracao: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/>',
   partilhar: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>',
   mensagem: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
@@ -239,9 +240,22 @@ export function novidade(jogo) {
   return null;
 }
 
+// Estado de visibilidade: 'publico', 'rascunho' ou 'privado' (só administradores e o autor).
+export function estadoJogo(jogo) {
+  if (jogo.publicado) return 'publico';
+  return jogo.privado ? 'privado' : 'rascunho';
+}
+
+export function seloEstado(jogo) {
+  const estado = estadoJogo(jogo);
+  const nomes = { publico: 'Público', rascunho: 'Rascunho', privado: 'Privado' };
+  return el('span', { class: `estado ${estado}` }, estado === 'privado' ? [icone('cadeado'), nomes[estado]] : nomes[estado]);
+}
+
 export function selos(jogo) {
   const etiqueta = novidade(jogo);
   return el('div', { class: 'selos' },
+    jogo.privado && !jogo.publicado ? el('span', { class: 'selo privado' }, icone('cadeado'), 'Privado') : null,
     etiqueta ? el('span', { class: `selo destaque-selo ${etiqueta === 'Novo' ? 'novo' : ''}` }, etiqueta) : null,
     jogavelNoBrowser(jogo) ? el('span', { class: 'selo' }, icone('browser'), 'Browser') : null,
     jogo.transferencias?.length ? el('span', { class: 'selo' }, icone('transferir'), 'Transferir') : null,

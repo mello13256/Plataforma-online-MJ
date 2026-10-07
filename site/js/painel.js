@@ -1,6 +1,6 @@
 import { bd, collection, getDocs, query, where } from './firebase.js';
 import {
-  capa, definirTitulo, el, eliminarJogo, exigirPerfil, formatarData, formatarNumero, icone, mensagem, pode, preencher,
+  capa, definirTitulo, seloEstado, el, eliminarJogo, exigirPerfil, formatarData, formatarNumero, icone, mensagem, pode, preencher,
   traduzirErro, vazio,
 } from './comum.js';
 
@@ -40,7 +40,7 @@ try {
         el('td', {}, el('a', { class: 'celula-jogo', href: `/jogo/${j.id}` },
           el('span', { class: 'miniatura' }, capa(j)),
           el('span', {}, el('strong', {}, j.titulo), el('br'), el('small', { class: 'meta' }, j.categoria)))),
-        el('td', {}, j.publicado ? el('span', { class: 'estado publico' }, 'Público') : el('span', { class: 'estado rascunho' }, 'Rascunho')),
+        el('td', {}, seloEstado(j)),
         el('td', {}, formatarNumero(j.jogadas)),
         el('td', {}, formatarNumero(j.gostos || 0)),
         el('td', {}, formatarData(j.atualizado_em)),

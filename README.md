@@ -22,12 +22,14 @@ Funciona 100% no plano gratuito do Firebase (Spark):
 
 **Para os autores:**
 - Publicar arrastando o jogo (pasta, `.zip`, `.html`) e as transferências (`.exe`, `.apk`…), com teste antes de publicar.
-- Capa e até 4 imagens de galeria arrastadas; categoria livre; rascunhos.
+- Capa e até 4 imagens de galeria arrastadas; categoria livre.
+- Visibilidade de cada jogo: **Público** (toda a gente), **Rascunho** (autores) ou **Privado** (só administradores e o próprio autor).
 - Apagar comentários dos próprios jogos.
 
 **Para o administrador (`/admin`):**
 - Estatísticas (jogos, jogadas, gostos, autores) e **espaço usado** face ao limite gratuito de 1 GB.
-- Todos os jogos com filtro, editar e remover; criar contas; permissões de cada utilizador.
+- Todos os jogos com filtro (incluindo por estado: públicos, rascunhos, privados), editar e remover; criar contas; permissões de cada utilizador.
+- Fila **Privados** na página inicial, visível apenas para administradores.
 
 ## Cópias de segurança
 

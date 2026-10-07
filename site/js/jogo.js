@@ -2,7 +2,7 @@ import {
   addDoc, bd, collection, deleteDoc, doc, getDoc, getDocs, increment, orderBy, query, serverTimestamp, updateDoc, where,
 } from './firebase.js';
 import {
-  capa, carregarAutores, cartaoJogo, definirTitulo, el, formatarData, formatarNumero, guardarLista, icone, iniciais,
+  capa, carregarAutores, cartaoJogo, definirTitulo, estadoJogo, el, formatarData, formatarNumero, guardarLista, icone, iniciais,
   jogavelNoBrowser, lerLista, mensagem, normalizar, notificar, obterPerfil, ordenarPorData, paginaErro, paragrafos,
   partilhar, pode, preencher, prepararServiceWorker, registarJogado, selos, transferirFicheiro, traduzirErro, urlJogo,
   utilizadorAtual, vazio,
@@ -283,8 +283,13 @@ try {
 
       preencher(conteudo,
         new URLSearchParams(location.search).has('novo')
-          ? mensagem('sucesso', jogo.publicado ? 'Jogo publicado! Já está visível para toda a gente.' : 'Rascunho guardado. Só os autores o conseguem ver.')
-          : !jogo.publicado ? mensagem('aviso', 'Este jogo é um rascunho: só os autores o conseguem ver.') : null,
+          ? mensagem('sucesso', {
+              publico: 'Jogo publicado! Já está visível para toda a gente.',
+              rascunho: 'Rascunho guardado. Só os autores o conseguem ver.',
+              privado: 'Jogo privado guardado. Só os administradores (e tu) o conseguem ver.',
+            }[estadoJogo(jogo)])
+          : estadoJogo(jogo) === 'rascunho' ? mensagem('aviso', 'Este jogo é um rascunho: só os autores o conseguem ver.')
+            : estadoJogo(jogo) === 'privado' ? mensagem('aviso', 'Jogo privado: só os administradores e o autor o conseguem ver.') : null,
         el('div', { class: 'pagina-jogo' },
           el('div', { class: 'bloco-texto' },
             el('div', {}, caixa, barra),

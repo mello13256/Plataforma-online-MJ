@@ -9,6 +9,7 @@ rules_version = '2';
 //   admin           tudo o que está acima + gerir utilizadores e permissões
 // O dono da plataforma (UID abaixo) é sempre administrador e não pode ser removido.
 // Visitantes (convidados) veem os jogos publicados e só podem somar +1 ao contador de jogadas.
+// Jogos privados só são vistos por administradores e pelo próprio autor.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -106,13 +107,15 @@ service cloud.firestore {
 
     function jogoValido(j) {
       return j.keys().hasOnly(['titulo', 'descricao', 'instrucoes', 'categoria', 'tipo', 'caminho',
-                               'url_externo', 'pacote', 'capa', 'capa_imagem', 'transferencias', 'publicado',
+                               'url_externo', 'pacote', 'capa', 'capa_imagem', 'transferencias', 'publicado', 'privado',
                                'jogadas', 'gostos', 'autor_uid', 'criado_em', 'atualizado_em'])
         && textoEntre(j.titulo, 1, 80)
         && textoAte(j.descricao, 5000)
         && textoAte(j.instrucoes, 2000)
         && textoEntre(j.categoria, 1, 40)
         && j.publicado is bool
+        && j.get('privado', false) is bool
+        && !(j.publicado == true && j.get('privado', false) == true)
         && j.jogadas is int
         && (j.get('capa', null) == null || caminhoSeguro(j.capa, '^(jogos|capas)/[^?#:\\\\]+$'))
         && (j.get('capa_imagem', null) == null || (j.capa_imagem is string && j.capa_imagem.size() <= 600000
@@ -168,8 +171,24 @@ service cloud.firestore {
       }
     }
 
+    // Público: todos. Rascunho: autores. Privado: administradores e o próprio autor.
+    // Nota: não usar j.get('privado', false) aqui — nas listagens, o valor por omissão
+    // faria passar jogos privados. Só se aceita quando privado é explicitamente false.
+    function podeVerDados(j) {
+      return j.publicado == true
+        || eDono()
+        || pode('admin')
+        || (temPerfil() && (j.autor_uid == request.auth.uid || j.privado == false));
+    }
+
+    function podeVerJogo(slug) {
+      return !exists(/databases/$(database)/documents/jogos/$(slug))
+        || podeVerDados(get(/databases/$(database)/documents/jogos/$(slug)).data);
+    }
+
     match /jogos/{slug} {
-      allow read: if resource.data.publicado == true || temPerfil() || eDono();
+      // resource == null: confirmar que um endereço ainda está livre ao criar um jogo.
+      allow read: if resource == null || podeVerDados(resource.data);
 
       allow create: if pode('publicar')
         && slug.matches('^[a-z0-9-]{1,70}$')
@@ -206,7 +225,7 @@ service cloud.firestore {
       // Comentários: qualquer pessoa comenta jogos publicados; o autor do jogo e
       // os administradores/moderadores apagam.
       match /comentarios/{comentario} {
-        allow read: if true;
+        allow read: if podeVerJogo(slug);
         allow create: if get(/databases/$(database)/documents/jogos/$(slug)).data.publicado == true
           && request.resource.data.keys().hasOnly(['nome', 'texto', 'uid', 'criado_em'])
           && textoEntre(request.resource.data.nome, 1, 40)
@@ -232,7 +251,7 @@ service cloud.firestore {
     }
 
     match /galerias/{slug} {
-      allow read: if true;
+      allow read: if podeVerJogo(slug);
       allow create, update: if podeEditarJogo(slug)
         && request.resource.data.keys().hasOnly(['imagens'])
         && request.resource.data.imagens is list && request.resource.data.imagens.size() <= 4

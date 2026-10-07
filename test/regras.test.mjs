@@ -55,7 +55,10 @@ beforeEach(async () => {
     await setDoc(doc(bd, 'autores/editor'), perfil('Editor', 'editor', { publicar: false, editar_todos: true }));
     await setDoc(doc(bd, 'autores/bloqueado'), perfil('Bloqueado', 'bloqueado', { publicar: false }));
     await setDoc(doc(bd, 'jogos/publicado'), { ...jogoBase(), criado_em: agora, atualizado_em: agora });
-    await setDoc(doc(bd, 'jogos/rascunho'), { ...jogoBase({ publicado: false }), criado_em: agora, atualizado_em: agora });
+    await setDoc(doc(bd, 'jogos/rascunho'), { ...jogoBase({ publicado: false, privado: false }), criado_em: agora, atualizado_em: agora });
+    await setDoc(doc(bd, 'jogos/privado'), { ...jogoBase({ publicado: false, privado: true }), criado_em: agora, atualizado_em: agora });
+    await setDoc(doc(bd, 'galerias/privado'), { imagens: ['data:image/webp;base64,UklGRg=='] });
+    await setDoc(doc(bd, 'jogos/privado/comentarios/c1'), { nome: 'Ana', texto: 'olá', criado_em: agora });
   });
 });
 
@@ -245,5 +248,46 @@ describe('gostos, comentários e galeria', () => {
     await assertFails(setDoc(doc(como('joel'), 'galerias/publicado'), { imagens: ['javascript:alert(1)'] }));
     await assertFails(setDoc(doc(como('joel'), 'galerias/publicado'), { imagens: Array(5).fill(imagens.imagens[0]) }));
     await assertSucceeds(getDoc(doc(visitante(), 'galerias/publicado')));
+  });
+});
+
+describe('jogos privados', () => {
+  it('só administradores e o autor veem jogos privados', async () => {
+    await assertFails(getDoc(doc(visitante(), 'jogos/privado')));
+    await assertFails(getDoc(doc(como('antigo'), 'jogos/privado')));
+    await assertFails(getDoc(doc(como('editor'), 'jogos/privado')));
+    await assertSucceeds(getDoc(doc(como(DONO), 'jogos/privado')));
+    await assertSucceeds(getDoc(doc(como('joel'), 'jogos/privado')));
+  });
+
+  it('galeria e comentários de jogos privados também ficam escondidos', async () => {
+    await assertFails(getDoc(doc(visitante(), 'galerias/privado')));
+    await assertFails(getDocs(collection(visitante(), 'jogos/privado/comentarios')));
+    await assertSucceeds(getDoc(doc(como(DONO), 'galerias/privado')));
+    await assertSucceeds(getDocs(collection(como(DONO), 'jogos/privado/comentarios')));
+  });
+
+  it('listar sem filtro nunca devolve jogos privados a quem não pode', async () => {
+    await assertFails(getDocs(collection(como('antigo'), 'jogos')));
+    await assertFails(getDocs(collection(visitante(), 'jogos')));
+    const resultado = await getDocs(query(collection(como('antigo'), 'jogos'), where('privado', '==', false)));
+    if (resultado.docs.some((d) => d.id === 'privado')) throw new Error('jogo privado devolvido');
+  });
+
+  it('o administrador lista todos os jogos; outros autores só com filtro', async () => {
+    await assertSucceeds(getDocs(collection(como(DONO), 'jogos')));
+    await assertFails(getDocs(collection(como('antigo'), 'jogos')));
+    await assertSucceeds(getDocs(query(collection(como('antigo'), 'jogos'), where('privado', '==', false))));
+    await assertSucceeds(getDocs(query(collection(como(DONO), 'jogos'), where('privado', '==', true))));
+  });
+
+  it('autores verificam se um endereço de jogo está livre', async () => {
+    await assertSucceeds(getDoc(doc(como('antigo'), 'jogos/ainda-nao-existe')));
+    await assertSucceeds(getDoc(doc(visitante(), 'jogos/ainda-nao-existe')));
+  });
+
+  it('um jogo não pode ser público e privado ao mesmo tempo', async () => {
+    await assertFails(setDoc(doc(como('joel'), 'jogos/ambos'), jogoBase({ publicado: true, privado: true })));
+    await assertSucceeds(setDoc(doc(como('joel'), 'jogos/so-privado'), jogoBase({ publicado: false, privado: true })));
   });
 });

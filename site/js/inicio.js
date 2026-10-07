@@ -1,7 +1,7 @@
 import { bd, collection, getDocs, query, where } from './firebase.js';
 import {
   CATEGORIAS, capa, carregarAutores, cartaoJogo, definirTitulo, el, formatarNumero, grelha, icone, jogavelNoBrowser,
-  lerLista, mensagem, normalizar, ordenarPorData, preencher, traduzirErro,
+  lerLista, mensagem, normalizar, obterPerfil, ordenarPorData, pode, preencher, traduzirErro,
 } from './comum.js';
 
 const conteudo = document.getElementById('conteudo');
@@ -70,6 +70,13 @@ try {
     carregarAutores(),
   ]);
   const todos = ordenarPorData(resultado.docs.map((d) => ({ id: d.id, ...d.data() })));
+
+  // Administradores: jogos privados numa fila própria.
+  const perfil = await obterPerfil().catch(() => null);
+  const privados = pode(perfil, 'admin')
+    ? ordenarPorData((await getDocs(query(collection(bd, 'jogos'), where('privado', '==', true))).catch(() => null))?.docs
+        .map((d) => ({ id: d.id, ...d.data() })) || [])
+    : [];
   const porId = new Map(todos.map((j) => [j.id, j]));
   const totais = {
     jogos: todos.length,
@@ -106,6 +113,11 @@ try {
 
     preencher(zonaDestaque, filtros ? null : todos.length ? destaque(todos[0], autores, totais) : boasVindas());
     preencher(zonaFilas, filtros ? null : [
+      privados.length
+        ? el('section', { class: 'fila' },
+            el('h2', {}, icone('cadeado'), 'Privados ', el('span', { class: 'opcional' }, '— só os administradores veem')),
+            el('div', { class: 'fila-cartoes' }, privados.map((j) => cartaoJogo(j, autores))))
+        : null,
       fila('Continuar a jogar', 'relogio', lerLista('jogados').map((s) => porId.get(s)).filter(Boolean).slice(0, 6), autores),
       fila('Os teus favoritos', 'coracao', lerLista('gostos').map((s) => porId.get(s)).filter(Boolean).slice(0, 6), autores),
     ]);

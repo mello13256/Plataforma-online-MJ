@@ -1,6 +1,6 @@
 import { bd, collection, criarConta, deleteDoc, doc, getDocs, setDoc, updateDoc } from './firebase.js';
 import {
-  PERMISSOES, UID_DONO, capa, carregarAutores, criarSlug, definirTitulo, el, eliminarJogo, exigirPerfil, formatarNumero, formatarTamanho, icone,
+  PERMISSOES, UID_DONO, capa, estadoJogo, seloEstado, carregarAutores, criarSlug, definirTitulo, el, eliminarJogo, exigirPerfil, formatarNumero, formatarTamanho, icone,
   iniciais, mensagem, normalizar, paginaErro, pode, preencher, traduzirErro, vazio,
 } from './comum.js';
 
@@ -57,15 +57,23 @@ function separadorJogos({ perfil, jogos, autores, aviso }) {
     }
   };
   const filtro = el('input', { type: 'search', placeholder: 'Filtrar por título, autor ou categoria…', 'aria-label': 'Filtrar jogos' });
-  filtro.addEventListener('input', () => {
+  const filtroEstado = el('select', { 'aria-label': 'Filtrar por estado', style: 'width:auto' },
+    el('option', { value: '' }, 'Todos os estados'),
+    el('option', { value: 'publico' }, 'Públicos'),
+    el('option', { value: 'rascunho' }, 'Rascunhos'),
+    el('option', { value: 'privado' }, 'Privados'));
+  const filtrar = () => {
     const termo = normalizar(filtro.value.trim());
     for (const linha of filtro.closest('.formulario').querySelectorAll('tbody tr')) {
-      linha.hidden = Boolean(termo) && !normalizar(linha.textContent).includes(termo);
+      linha.hidden = (Boolean(termo) && !normalizar(linha.textContent).includes(termo))
+        || (Boolean(filtroEstado.value) && linha.dataset.estado !== filtroEstado.value);
     }
-  });
+  };
+  filtro.addEventListener('input', filtrar);
+  filtroEstado.addEventListener('change', filtrar);
   return el('div', { class: 'formulario' },
     el('div', { class: 'cabecalho-seccao' },
-      el('div', { style: 'flex:1;max-width:420px' }, filtro),
+      el('div', { class: 'acoes', style: 'flex:1;max-width:600px;flex-wrap:nowrap' }, filtro, filtroEstado),
       pode(perfil, 'publicar') ? el('a', { class: 'botao', href: '/editar' }, icone('mais'), 'Adicionar jogo') : null,
     ),
     jogos.length
@@ -75,12 +83,12 @@ function separadorJogos({ perfil, jogos, autores, aviso }) {
               el('th', {}, 'Jogo'), el('th', {}, 'Autor'), el('th', {}, 'Estado'), el('th', {}, 'Jogadas'),
               el('th', {}, el('span', { class: 'oculto' }, 'Ações')))),
             el('tbody', {}, jogos.map((j) => {
-              const linha = el('tr', {},
+              const linha = el('tr', { 'data-estado': estadoJogo(j) },
                 el('td', {}, el('a', { class: 'celula-jogo', href: `/jogo/${j.id}` },
                   el('span', { class: 'miniatura' }, capa(j)),
                   el('span', {}, el('strong', {}, j.titulo), el('br'), el('small', { class: 'meta' }, j.categoria)))),
                 el('td', {}, autores.get(j.autor_uid)?.nome || '—'),
-                el('td', {}, j.publicado ? el('span', { class: 'estado publico' }, 'Público') : el('span', { class: 'estado rascunho' }, 'Rascunho')),
+                el('td', {}, seloEstado(j)),
                 el('td', {}, formatarNumero(j.jogadas)),
                 el('td', { class: 'acoes-linha' },
                   pode(perfil, 'editar_todos') ? el('a', { class: 'botao pequeno secundario', href: `/editar?id=${j.id}` }, icone('editar'), 'Editar') : null,
@@ -227,7 +235,9 @@ async function mostrar(perfil, separador = 'jogos', avisoInicial = null) {
   const cartaoNumero = (nomeIcone, valor, rotulo) => el('div', { class: 'cartao-numero' },
     icone(nomeIcone), el('strong', {}, valor), el('span', {}, rotulo));
   const estatisticas = el('section', { class: 'painel-numeros' },
-    cartaoNumero('comando', formatarNumero(jogos.filter((j) => j.publicado).length), `jogos publicados${jogos.some((j) => !j.publicado) ? ` · ${jogos.filter((j) => !j.publicado).length} rascunhos` : ''}`),
+    cartaoNumero('comando', formatarNumero(jogos.filter((j) => j.publicado).length), ['jogos publicados',
+      jogos.some((j) => estadoJogo(j) === 'rascunho') ? ` · ${jogos.filter((j) => estadoJogo(j) === 'rascunho').length} rascunhos` : '',
+      jogos.some((j) => estadoJogo(j) === 'privado') ? ` · ${jogos.filter((j) => estadoJogo(j) === 'privado').length} privados` : ''].join('')),
     cartaoNumero('jogar', formatarNumero(jogos.reduce((soma, j) => soma + (j.jogadas || 0), 0)), 'jogadas'),
     cartaoNumero('coracao', formatarNumero(jogos.reduce((soma, j) => soma + (j.gostos || 0), 0)), 'gostos'),
     cartaoNumero('utilizadores', formatarNumero(autores.size), 'autores'),
